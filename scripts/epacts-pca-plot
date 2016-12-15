@@ -1,0 +1,283 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Cwd;
+use FindBin;
+use File::Basename;
+use lib "$FindBin::Bin";
+use wGetOptions qw(wGetOptions wpod2usage);
+use epacts qw(@chrs @szchrs @cumszchrsMb parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrs readPedVcf readPedKinLabel $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binpfbtops $bingnuplot $binepstopdf $binsort $defaultfasta installPackages);
+
+my $out = "";
+my $eigf = "";
+my $kinf = "";
+my $ped = "";
+my $label = "";
+my $pointsize = 0.7;
+my $maxpc = 100;
+my $drawpc = "1,2";
+my $xrange = "";
+my $yrange = "";
+my $csvColors = "";
+my $csvPts = "";
+my $labelOnly = "";
+my $keyWidth = "-2";
+my $shiftFlag = "";
+my $writePed = "";
+
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+wGetOptions(
+    "-PCA computation and visualization tool of VCF files",
+    "--Required Options",
+    "kinf=s",[\$kinf,
+	      "Input kinship file (generated from B<epacts make-kin>)",
+	      ],
+    "ped=s",[\$ped,
+	     "Input PED file for phenotypes and covariates",
+	     "Input PED file containing phenotype and covariate information. It accepts PED file format used in PLINK or MERLIN software. There are two ways to specify the column name of the phenotypes or covariates, either (1) using a header line starting with '#' and series of column names, or (2) by having a separate .dat file containing the column name, similar to the MERLIN input format",
+	     ],
+    "label=s",[\$label,
+	       "Individual used for PCA plot",
+	       ],
+    "out=s",[\$out,
+	     "Prefix of output files",
+	     ],
+    "--Additional Options",
+    "eigf=s",[\$eigf,
+	      "Output prefix out eigendecomposition files. Same to -out if unspecified",
+	      ],
+    "pointsize=f",[\$pointsize,
+		   "Size of point to draw",
+		   ],
+    "maxpc=i",[\$maxpc,
+	       "Maximum number of PCs to calculate",
+	       ],
+    "drawpc=s",[\$drawpc,
+		"Number of PCs to draw pairwise PCA plots",
+		],
+    "xrange=s",[\$xrange,
+		"Range of x-axis to draw formatted as min:max",
+		],
+    "yrange=s",[\$yrange,
+		"Range of y-axis to draw formatted as min:max",
+		],
+    "colors=s",[\$csvColors,
+		"Comma-separated list of colors",
+		],
+    "pts=s",[\$csvPts,
+	     "Comma-separate list of pointtypes",
+	     ],
+    "labeled-only",[\$labelOnly,
+		  "Plot labeled samples only",
+		  ],
+    "key-width=i",[\$keyWidth,
+		   "Width of key in the legend",
+		   ],
+    "shift",[\$shiftFlag,
+	     "Do not use first (gray) colors",
+	     ],
+    "write-ped",[\$writePed,
+		 "Write a new PED file including PCs",
+		 ],
+    ) || wpod2usage(2);
+
+unless ( ( $ped ) && ( $out ) && ( $kinf ) ) {
+    print STDERR "ERROR: Missing required option\n";
+    wpod2usage(2);
+}
+
+my $epactsdir = dirname($FindBin::Bin);
+my $datadir = "$epactsdir/share/EPACTS";
+
+#unless ( -s $kinf ) {
+#    my $cmd = "$bindir/bin/epacts-make-kin --vcf $vcf --out $kinf --pca $maxpc --outf $out --remove-complex --min-maf $";
+#    print "$cmd\n"; print `$cmd`;
+#}
+
+$eigf = $out unless ( $eigf );
+
+unless ( -s "$eigf.evecs" ) {
+    my $cmd = "$epactsdir/bin/pEmmax kin-util --kinf $kinf --pca $maxpc --outf $eigf";
+    print "$cmd\n"; print `$cmd`;
+    die "FATAL ERROR - epacts-pca-plot: Error occured while computing PCs" if ( $? == -1 ); 
+}
+
+my ($rVcfIds,$rhPhes) = &readPedKinLabel($epactsdir,$ped,"$eigf.evecs",$label);
+
+if ( $writePed ) {
+## Write a ned PED file
+    print STDERR "Writing a new PED file $out.ped containing top $maxpc PCs..\n";
+    my $dat = $ped;
+    $dat =~ s/\.ped$/.dat/;
+    open(IN,$ped) || die "Cannot open $ped for reading";
+
+    my %hevecs = ();
+    open(EVECS,"$eigf.evecs") || die "Cannot open $ped for reading";
+    while(<EVECS>) {
+	my ($id,@evecs) = split;
+	$hevecs{$id} = \@evecs;
+    }
+    close EVECS;
+
+    open(OUT,">out.ped") || die "Cannot open $out.ped for writing\n";
+    while(<IN>) {
+	if ( /^#/ ) {
+	    chomp;
+	    print OUT $_;
+	    for(my $i=0; $i < $maxpc; ++$i) {
+		print OUT "\tPC".($i+1);
+	    }
+	    print OUT "\n";
+	}
+	else {
+	    chomp;
+	    my ($id) = split;
+
+	    die "Cannot find eigenvectors for $id. Check whether PED and VCF matches\n" unless ( defined($hevecs{$id}) );
+
+	    print OUT $_;
+	    print OUT "\t";
+	    print OUT join("\t",$hevecs{$id});
+	    print OUT "\n";
+	}
+    }
+    close OUT;
+    close IN;
+
+    if ( -s $dat ) {
+	open(IN,$dat) || die "Cannot open $dat for reading\n";
+	open(OUT,">$out.dat") || die "Cannot open $dat\n";
+	while(<IN>) {
+	    print OUT $_;
+	}
+	for(my $i=0; $i < $maxpc; ++$i) {
+	    print OUT "PC".($i+1);
+	    print OUT "\n";
+	}
+	close OUT;
+	close IN;
+    }
+}
+
+#my @colors = qw(3366FF FF6633 CC33FF 33CCFF FF33CC 33FFCC B88A00 555555 6633FF F5B800 33FF66 66FF33 CCFF33 FFCC33);
+#my @pts = (8,4,6,10);
+
+#my @colors = qw(999999 0000FF 00CC00 AA00AA CC0000);
+#my @pts = (1,10,4,6,8);
+#my @colors = ($csvColors) ? split(/,/,$csvColors) : qw(999999 0000FF 00CC00 AA00AA CCCC00 FF0000 00FFFF 800000 006000 000080 808000 800080 008080 808080);
+my @colors = ($csvColors) ? split(/,/,$csvColors) : qw(0000FF 00CC00 AA00AA CCCC00 FF0000 00FFFF 800000 006000 000080 808000 800080 008080 808080);
+
+my @pts = ($csvPts) ? split(/,/,$csvPts) : (10,4,6,8,2,3,5,7,9,11,1);
+shift(@colors) if ( $shiftFlag );
+shift(@pts) if ( $shiftFlag );
+
+my @drawpcs = split(/,/,$drawpc);
+
+for(my $i=0; $i < @drawpcs; ++$i) {
+    my $ipc = $drawpcs[$i];
+    for(my $j=$i+1; $j < @drawpcs; ++$j) {
+	my $jpc = $drawpcs[$j];
+	my $outf = sprintf("%s.%d.%d",$out,$ipc,$jpc);
+	open(CMD,">$outf.cmd") || die "Cannot open file\n";
+	print CMD "set terminal postscript eps color enhanced dashed dashlength 3.0 linewidth 1.0 size 3.5,3.5 font 'Calibri,16' fontfile 'calibri.pfb' fontfile 'GillSansMT.pfb' fontfile 'GillSansItalic.pfb'\n";
+	print CMD "set out '$outf.eps'\n";
+	print CMD "set key left below box width $keyWidth samplen 1\n";
+	print CMD "set xtics out nomirror\n";
+	print CMD "set ytics out nomirror\n";
+	print CMD "set pointsize $pointsize\n";
+	print CMD "set grid x y\n";
+	print CMD "set xlabel 'PC$ipc'\n";
+	print CMD "set ylabel 'PC$jpc'\n";
+	print CMD "set xrange [$xrange]\n" if ( $xrange );
+	print CMD "set yrange [$yrange]\n" if ( $yrange );
+	my @xs = ();
+	my @ys = ();
+	my @labels = ();
+	open(IN,"$eigf.evecs") || die "Cannot open file\n";
+	while(<IN>) {
+	    next if ( /^#/ );
+	    my ($id,@PCs) = split;
+	    if ( defined($rhPhes->{$id}) ) {
+		push(@labels,$rhPhes->{$id});
+	    }
+	    elsif ( $labelOnly ) {
+		next;
+	    }
+	    else {
+		push(@labels,"UNKNOWN");
+	    }
+	    push(@xs,$PCs[$ipc-1]);
+	    push(@ys,$PCs[$jpc-1]);
+	}
+	close IN;
+
+	&plotLabeledPoints(\@xs,\@ys,\@labels);
+	close CMD;
+
+	my $setenv = "export GDFONTPATH=$datadir; export GNUPLOT_FONTPATH=$datadir; export GNUPLOT_PS_DIR=$datadir; export PATH=\$PATH:$epactsdir/bin/; export GNUPLOT_PFBTOPFA=\"$binpfbtops %s\"";
+	
+	my $cmd = "$setenv; $bingnuplot $outf.cmd";
+	print "$cmd\n"; print `$cmd`;
+	die "FATAL ERROR - epacts-pca-plot: Error occured while running gnuplot" if ( $? == -1 ); 
+	
+	$cmd = "$setenv; $binepstopdf $outf.eps";
+	print "$cmd\n"; print `$cmd`;
+	die "FATAL ERROR - epacts-pca-plot: Error occured while running epstopdf" if ( $? == -1 ); 
+	
+	print "Created $outf.pdf\n";
+
+	$cmd = "$binrm $outf.eps $outf.cmd";
+	print "$cmd\n"; print `$cmd`;
+	die "FATAL ERROR - epacts-pca-plot: Error occured while removing files" if ( $? == -1 ); 
+    }
+}
+
+sub sortLabels {
+    my $rl = shift;
+    my $nl = $#{$rl}+1;
+
+    my %hl = ();
+
+    for(my $i=0; $i < $nl; ++$i) {
+	$hl{$rl->[$i]} = 0 unless defined($hl{$rl->[$i]});
+	++$hl{$rl->[$i]};
+    }
+    my @labels = sort keys %hl;
+
+    my %l2n = ();
+    for(my $i=0; $i < @labels; ++$i) { $l2n{$labels[$i]} = $i; }
+
+    my @counts = ();
+    foreach my $l (@labels) {
+	push(@counts,$hl{$l});
+    }
+    return (\@labels,\@counts,\%l2n);
+}
+
+sub plotLabeledPoints {
+    my ($rx,$ry,$rl) = @_; 
+    my ($nx,$ny,$nl) = ($#{$rx}+1,$#{$ry}+1,$#{$rl}+1);
+    die "Array size is not identical\n" unless ( ($nx == $ny) && ( $nl == $nx) );
+    my ($rLabels,$rCnts,$rl2n) = &sortLabels($rl);
+    my %l2n = %{$rl2n};
+    print CMD "plot ";
+    for(my $i=0; $i <= $#{$rLabels}; ++$i) {
+	if ( defined($rCnts->[$i]) ) {
+	    print CMD ", " if ( $i > 0 );
+	    print CMD "NaN with points pt ".($pts[$i % @pts])." lw 2 lc rgbcolor '#".($colors[$i % @colors])."' title '".($rLabels->[$i])." (".($rCnts->[$i]).")'";
+	}
+    }
+    for(my $i=0; $i < $nx; ++$i) {
+	my $j = $l2n{$rl->[$i]};
+	print CMD ", '-' u 1:2 with points pt ".($pts[$j % @pts])." lw 2 lc rgbcolor '#".($colors[$j % @colors])."' notitle";
+    }
+    print CMD "\n";
+
+    for(my $i=0; $i < $nx; ++$i) {
+	print CMD $rx->[$i];
+	print CMD "\t";
+	print CMD $ry->[$i];
+	print CMD "\ne\n";
+    }
+}

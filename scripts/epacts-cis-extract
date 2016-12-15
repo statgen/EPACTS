@@ -1,0 +1,231 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Cwd;
+use FindBin;
+use File::Basename;
+use lib "$FindBin::Bin";
+use wGetOptions qw(wpod2usage wGetOptions);
+use epacts qw(@chrs @szchrs parsePheno readPedVcf readPedVcfMulti $binR $binRscript $binrm $binmake $binawk $defaultfasta installPackages %ichrs forkExecWait getMosixCmd);
+
+my $bed = "";
+my $prefix = "";
+my $win = 1000000;
+my $out = "";
+my $ucsc = "";
+my $maxp = 1e-3;
+
+## distributions we're interested in
+my $maxGenes = 100000;
+my $iGenes = 0;
+my @mincs = (1) x $maxGenes;  ## minimum cis-p-values per gene
+my @mints = (1) x $maxGenes;  ## minimum trans p-values per gene
+my %hbins = ();  ## minimum trans-p-value per gene per win*2 bins
+
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+wGetOptions(
+    "-EPACTS cis-eQTL summarization",
+    "--Required Options",
+    "bed=s",[\$bed,
+	     "Input BED (bgzipped and tabixed) file for gene boundaries",
+	     "The input BED file should contain [CHROM] [BEG] [END] [GENE_NAME_IN_PED_FILE] in each line.\nAnd the BED file needs to be ordered by chromosomal coordinate, and must be bgzipped and tabixed.\nNote that BED file coordinates are 0-based, including [BEG], excluding [END]",
+	     ],
+    "prefix=s",[\$prefix,
+	     "Output prefix of epacts-multi",
+	     ],
+    "--Additional Options",
+    "out=s",[\$out,
+	     "Output file name",
+	     ],
+    "win=i",[\$win,
+	      "Window to be considred in base pair",
+	      ],
+    "ucsc",[\$ucsc,
+	    "BED file is in UCSC format with 'chr' in the chromosome prefix",
+	    ],
+    "max-pvalue=f",[\$maxp,
+		    "maximum p-value",
+		    ],
+    ) || wpod2usage(2);
+
+unless ( ( $bed ) && ( $prefix ) ) {
+    print STDERR "ERROR: Missing required option\n";
+    wpod2usage(2);
+}
+
+$prefix =~ s/\.epacts.gz$//;
+$out = "$prefix.epacts.ciseqtl.gz" unless ( $out );
+
+die "--out $out must be gzipped format\n" unless ( $out =~ /\.gz$/ );
+die "Cannot open $bed\n" unless ( -s $bed );
+die "Cannot open $bed.tbi\n" unless ( -s "$bed.tbi" );
+die "Cannot open $prefix.epacts.gz\n" unless ( -s "$prefix.epacts.gz" );
+die "Cannot open $prefix.epacts.gz.tbi\n" unless ( -s "$prefix.epacts.gz.tbi" );
+
+open(OUT,"| bgzip -c > $out") || die "Cannot open $out\n";
+print OUT "#CHROM\tBEG\tEND\tMARKER\tMAF\tGENE\tTXSTART\tTXEND\tPVALUE\tBETA\n";
+foreach my $chr (@chrs) {
+    print STDERR "Processing chr$chr..\n";
+    my @begs = ();
+    my @ends = ();
+    my @genes = ();
+    my @igenes = ();
+
+    my %hgenes = ();
+
+    my $imaf = -1;
+
+    open(IN,"tabix -h $prefix.epacts.gz $chr:0|") || die "Cannot open file\n";
+    my @F = split(/[\t\r\n]/,<IN>);
+    for(my $i=0; $i < @F; ++$i) {
+	if ( $F[$i] =~ /^(\S+)\.P$/ ) {
+	    $hgenes{$1} = $i;
+	}
+	else {
+	    $imaf = $i if ( $F[$i] eq "MAF" );
+	}
+    }
+
+    die "Cannot find MAF column\n" if ( $imaf < 0 );
+
+    my $compact = (scalar keys %hgenes == 0) ? 1 : 0;
+    my $nheader = $#F+1;
+
+    my ($il,$iu) = (0,0);
+    open(BED,"tabix $bed ".($ucsc ? "chr" : "")."$chr:0|") || die "Cannot open file\n";
+    my %higenes = ();
+    while(<BED>) {
+	my ($chr,$beg,$end,$gene) = split;
+	$beg -= $win;
+	$beg = 0 if ( $beg < 0 );
+	$end += $win;
+	push(@begs,$beg);
+	push(@ends,$end);
+	push(@genes,$gene);
+	if ( $compact == 0 ) {
+	    die "Cannot find $hgenes{$gene}\n" unless ( defined($hgenes{$gene}) );
+	    push(@igenes,$hgenes{$gene});
+	}
+	$higenes{$gene} = $#genes;
+    }
+    close BED;
+
+    print STDERR "WARNING: No genes found in chr$chr.. Check whether you need to turn on --ucsc option\n" if ( $#genes < 0 );
+
+    while(<IN>) {
+	my @F = split(/[\t\r\n]/);
+	next if ( ( $compact == 0 ) && ( $F[$igenes[0]] eq "NA" ) );
+
+	my $bkey = sprintf("%s.%06d",$F[0],$F[1]/($win*2));
+	unless ( defined($hbins{$bkey}) ) {
+	    my @a = (1) x $maxGenes;
+	    $hbins{$bkey} = \@a;
+	}
+
+	## end[il] >= bp, beg[iu] < bp
+	while ( ( $il <= $#genes ) && ( $ends[$il] < $F[1] ) ) {
+	    ++$il;
+	}
+	$iu = $il if ( $iu < $il );
+	while ( ( $iu <= $#genes ) && ( $begs[$iu] < $F[1] ) ) {
+	    ++$iu;
+	}
+
+	if ( $compact == 0 ) {
+	    for(my $i=0; $i < $il; ++$i) {
+		if ( $F[$igenes[$i]] ne "NA" ) {
+		    $mints[$i+$iGenes] = $F[$igenes[$i]] if ( $mints[$i+$iGenes] > $F[$igenes[$i]] );
+		    $hbins{$bkey}->[$i+$iGenes] = $F[$igenes[$i]] if ( $hbins{$bkey}->[$i+$iGenes] > $F[$igenes[$i]] );
+		}
+	    }
+	    for(my $i=$il; $i < $iu; ++$i) {  ## scan the cis genes
+		## make sure that it is in the range
+		if ( $F[$igenes[$i]] ne "NA" ) {
+		    if ( ( $begs[$i] < $F[1] ) && ( $ends[$i] >= $F[2] ) && ( $F[$igenes[$i]] <= $maxp ) ) {
+			print OUT join("\t",$F[0],$F[1],$F[2],$F[3],$F[$imaf],$genes[$i],$begs[$i],$ends[$i],$F[$igenes[$i]],$F[$igenes[$i]+1]);
+			print OUT "\n";
+			$mincs[$i+$iGenes] = $F[$igenes[$i]] if ( $mincs[$i+$iGenes] > $F[$igenes[$i]] );
+		    }
+		    else {
+			$mints[$i+$iGenes] = $F[$igenes[$i]] if ( $mints[$i+$iGenes] > $F[$igenes[$i]] );
+			$hbins{$bkey}->[$i+$iGenes] = $F[$igenes[$i]] if ( $hbins{$bkey}->[$i+$iGenes] > $F[$igenes[$i]] );
+		    }
+		}
+	    }
+	    for(my $i=$iu; $i <= $#genes; ++$i) {
+		if ( $F[$igenes[$i]] ne "NA" ) {
+		    $mints[$i+$iGenes] = $F[$igenes[$i]] if ( $mints[$i+$iGenes] > $F[$igenes[$i]] );
+		    $hbins{$bkey}->[$i+$iGenes] = $F[$igenes[$i]] if ( $hbins{$bkey}->[$i+$iGenes] > $F[$igenes[$i]] );
+		}
+	    }
+	}
+	else {
+	    for(my $i=$nheader; $i < @F; ++$i) {
+		my ($gene,$pval,$beta) = split(/,/,$F[$i]);
+		my $j = $higenes{$gene};
+		if ( defined($j) ) {
+		    if ( ( $j >= $il ) && ( $j < $iu ) && ( $begs[$j] < $F[1] ) && ( $ends[$j] >= $F[2] ) && ( $pval <= $maxp ) ) {
+			print OUT join("\t",$F[0],$F[1],$F[2],$F[3],$F[$imaf],$gene,$begs[$j],$ends[$j],$pval,$beta);
+			print OUT "\n";
+			$mincs[$j+$iGenes] = $pval if ( $mincs[$j+$iGenes] > $pval );
+		    }
+		    else {
+			$mints[$j+$iGenes] = $pval if ( $mints[$j+$iGenes] > $pval );
+			$hbins{$bkey}->[$j] = $pval if ( $hbins{$bkey}->[$j] > $pval );
+		    }
+		}
+	    }
+	}
+    }
+    close IN;
+
+    $iGenes += ($#genes+1);
+    #print STDERR "iGenes=$iGenes\n";
+}
+close OUT;
+
+my $epactsdir = dirname($FindBin::Bin);
+&forkExecWait("$epactsdir/bin/tabix -pbed $out");
+
+print STDERR  "#### Computing Approximate FDRs..\n";
+my $nNulls = $iGenes * 10;
+my @nulls = (1) x $nNulls;
+foreach my $bkey (keys %hbins) {
+    my $r = $hbins{$bkey};
+    for(my $i=0; $i < $nNulls; ++$i) {
+	my $j = int(rand($iGenes));
+	$nulls[$i] = $r->[$j] if ( $nulls[$i] > $r->[$j] );
+    }
+}
+
+my %hhist = ();
+for(my $i=0; $i < $nNulls; ++$i) {
+    my $fkey = sprintf("%.1e",$nulls[$i]);
+    $hhist{$fkey} = [0,0,0] unless ( defined($hhist{$fkey}) );
+    ++($hhist{$fkey}->[0]);
+}
+
+### give a summary of cis and trans-eQTLs
+for(my $i=0; $i < $iGenes; ++$i) {
+    my $key = sprintf("%.1e",$mincs[$i]);
+    $hhist{$key} = [0,0,0] unless ( defined($hhist{$key}) );
+    ++($hhist{$key}->[1]);
+
+    $key = sprintf("%.1e",$mints[$i]);
+    $hhist{$key} = [0,0,0] unless ( defined($hhist{$key}) );
+    ++($hhist{$key}->[2]);
+}
+
+open(SUM,">$out.summary") || die "Cannot open file\n";
+print SUM "#PVALUE\tN.CIS\tN.TRANS\tFDR(Approx)\n";
+my @s = (0,0,0);
+foreach my $key (sort {$a <=> $b} keys %hhist) {
+    $s[0] += ($hhist{$key}->[0]);
+    $s[1] += ($hhist{$key}->[1]);
+    $s[2] += ($hhist{$key}->[2]);
+    if ( $key > 1e-10 ) {
+	print SUM join("\t", $key, $s[1], $s[2], sprintf("%.6lf", ($s[0]+1) / ($nNulls+1) ) )."\n";
+    }
+}
+close SUM;

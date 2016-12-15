@@ -1,0 +1,96 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+use FindBin;
+use lib "$FindBin::Bin";
+use Net::FTP;
+
+my $man = 0;
+my $help = 0;
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+GetOptions("help|?" => \$help, 
+	   "man" => \$man,
+    ) || pod2usage(2);
+
+pod2usage(1) if $help;
+
+pod2usage(-verbose => 2) if $man;
+
+my $epactsdir = "$FindBin::Bin/../";
+my $datadir = "$epactsdir/share/EPACTS";
+
+my $hostname = "ftp.1000genomes.ebi.ac.uk";
+my $dir = "/vol1/ftp/technical/reference";
+my $fasta = "human_g1k_v37.fasta.gz";
+my $fai = "human_g1k_v37.fasta.fai";
+
+print "Connecting to $hostname\n";
+my $ftp = Net::FTP->new("$hostname", Debug => 0) or die "Cannot connect to $hostname $@";
+$ftp->login("anonymous",'-anonymous@') || die "Cannot login ", $ftp->message;
+
+$ftp->cwd("$dir") or die "Cannot change working directory ", $ftp->message;
+
+$ftp->binary() or die "Cannot change to binary mode", $ftp->message;
+
+print "Downloading $fai..\n";
+$ftp->get("$fai") or die "get $fai failed ", $ftp->message;
+
+print "Moving $fai to $datadir/\n";
+rename("$fai","$datadir/$fai");
+
+print "Downloading $fasta.. Please be patient. This will take a while\n";
+$ftp->get("$fasta") or die "get $fasta failed ", $ftp->message;
+
+print "Moving $fasta to $datadir/\n";
+rename("$fasta","$datadir/$fasta");
+$ftp->quit;
+
+print "Decompressing the file\n";
+my $cmd = "gzip -d $datadir/$fasta";
+print "$cmd\n"; print `$cmd`;
+die "FATAL ERROR - epacts-download: Error occured while decompressing the FASTA file" if ( $? == -1 ); 
+
+print "Successfully installed the reference FASTA file\n";
+
+__END__
+
+=head1 NAME
+
+epacts download - Download EPACTS resource files
+
+=head1 SYNOPSIS
+
+epacts download
+
+ Options (See details for more info):
+   -help       Print out brief help message
+   -man        Print the full documentation in man page style
+
+=head1 EPACTS WIKI DOCUMENTASTION
+
+ Visit http://genome.sph.umich.edu/wiki/EPACTS for detailed documentation
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-help>
+
+Print a brief help message and exits.
+
+=item B<-man>
+
+Prints the manual page and exits.
+
+=head1 DESCRIPTION
+
+B<epacts> is an efficient and flexible software pipelien for sequence-based
+genetic analysis. It takes VCF-formatted file as input and performs a wide
+variety of single variant and buden test. 
+
+Visit http://genome.sph.umich.edu/wiki/EPACTS for more detailed documentation
+
+=cut

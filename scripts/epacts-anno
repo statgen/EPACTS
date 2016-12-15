@@ -1,0 +1,109 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Cwd;
+use FindBin;
+use File::Basename;
+use lib "$FindBin::Bin";
+use wGetOptions qw(wpod2usage wGetOptions);
+use epacts qw(@chrs @szchrs @cumszchrsMb parsePheno schr2nchr %ichrs $binR $binRscript $binrm $binmake $binzcat $binmv $defaultfasta);
+
+my $epactsdir = dirname($FindBin::Bin);
+my $datadir = "$epactsdir/share/EPACTS";
+my $in = "";
+my $out = "";
+my $db = "gencodeV14";
+my $buildver = "hg19";
+my $ref = $defaultfasta;
+my $codonf = "$datadir/codon.txt";
+my $priorityf = "$datadir/priority.txt";
+my $genef = "";
+my $keep = "";
+
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+wGetOptions(
+    "-Annotate EPACTS or VCF file",
+    "--Required Options",
+    "in=s", [\$in,
+	     "Input VCF or EPACTS output file",
+	     "(Required) Input VCF file (.vcf or .vcf.gz) or EPACTS output file (.epacts or .epacts.gz) ,which must be tabixed and bgzipped"],
+    
+    "--Additional Options",
+    "out=s",[\$out,
+	     "Prefix of outfile files",
+	     "Prefix of annotation output files. If -out is not specified, the original file will be overwritten with annotation"],
+    "db=s", [\$db,
+	     "Gene prediction database",
+	     "Database of gene prediction. gencodeV7, gencodeV14, and refGene are available options. Using --genef option can explictly point the gene prediction file in UCSC format"],
+    "buildver=s", [\$buildver,
+		   "Name of genome build",
+		   "Name of genome build used for the annotation. hg19 is available option"],
+    "ref=s", [\$ref, 
+	      "Reference FASTA file",
+	      "Name of the reference FASTA file. Corresponding FASTA index file (.fai) must exist"],
+    "genef=s", [\$genef,
+		"Gene prediction file in UCSC refGene format",
+		"UCSC refGene format gene database file in plain or gzipped format"],
+    "keep", [\$keep,
+	     "Keep intermediate files",
+	     "Keep intermediate files (.frq, .log, etc)"],
+    ) || wpod2usage(2);
+
+unless ( ( $in ) && ( -e $in ) && ( $ref ) && ( -s $ref ) && ( -s "$ref.fai" ) ) {
+    print STDERR "ERROR: Missing required options\n";
+    print STDERR "Cannot open $in\n" unless ( -s $in );
+    print STDERR "Cannot open $ref\n" unless ( -s $ref );
+    print STDERR "Cannot open $ref.fai\n" unless ( -s "$ref.fai" );
+    wpod2usage(2);
+}
+
+if ( -s $in ) {
+    my $format = ( $in =~ /\.epacts(.gz)?$/ ? "epacts" : "vcf" );
+    $genef = "$datadir/$buildver\_$db.txt.gz" if ( $genef eq "" );
+    $out = "$in.tmp" if ( $out eq "" );
+
+    my $cmd = "$epactsdir/bin/anno -i $in -r $ref -f refGene -g $genef -c $codonf -o $out --inputFormat $format -p $priorityf";
+    print "$cmd\n"; print `$cmd`;
+    die "FATAL ERROR - epacts-anno: Error occured while annotating the input file" if ( $? == -1 ); 
+
+    if ( $out eq "$in.tmp" ) {
+	if ( $in =~ /.gz$/ ) {
+	    $cmd = "$epactsdir/bin/bgzip -c $in.tmp > $in; $binrm $in.tmp";
+	}
+	else {
+	    $cmd = "$binmv $in.tmp $in";
+	}
+	print "$cmd\n"; print `$cmd`;
+	die "FATAL ERROR - epacts-anno: Error occured while replacing the file" if ( $? == -1 ); 
+    }
+    elsif ( $out =~ /.gz$/ ) {
+	$cmd = "$binmv $out $in.tmp";
+	print "$cmd\n"; print `$cmd`;
+	$cmd = "$epactsdir/bin/bgzip -c $in.tmp > $out";
+	print "$cmd\n"; print `$cmd`;
+	die "FATAL ERROR - epacts-anno: Error occured during bgzip" if ( $? == -1 ); 
+	if ( $out =~ /.epacts.gz$/ ) {
+	    $cmd = "$epactsdir/bin/tabix -pbed -f $out";
+	    print "$cmd\n"; print `$cmd`;
+	    die "FATAL ERROR - epacts-anno: Error occured during tabix" if ( $? == -1 ); 
+	}
+	elsif ( $out =~ /.vcf.gz$/ ) {
+	    $cmd = "$epactsdir/bin/tabix -pvcf -f $out";
+	    print "$cmd\n"; print `$cmd`;
+	    die "FATAL ERROR - epacts-anno: Error occured during tabix" if ( $? == -1 ); 
+	}
+	$cmd = "$binrm $in.tmp";    
+	print "$cmd\n"; print `$cmd`;
+	die "FATAL ERROR - epacts-anno: Error occured while removing files" if ( $? == -1 ); 
+    }
+
+    unless ( $keep ) {
+	$cmd = "$binrm $out.log $out.top.anno.frq $out.anno.frq $out.base.frq $out.codon.frq $out.indel.frq";    
+	print "$cmd\n"; print `$cmd`;
+	die "FATAL ERROR - epacts-anno: Error occured while removing files" if ( $? == -1 ); 
+    }
+}
+else {
+    print STDERR "Warning: The input file $in is empty. Skipping..\n";
+}

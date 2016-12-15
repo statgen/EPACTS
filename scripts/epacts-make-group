@@ -1,0 +1,156 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Cwd;
+use FindBin;
+use File::Basename;
+use lib "$FindBin::Bin";
+use wGetOptions qw(wpod2usage wGetOptions);
+use epacts qw(@chrs @szchrs @cumszchrsMb parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrs readPedVcf $binR $binRscript $binrm $binmake $binzcat $binmv $bincut $bingrep);
+
+my $vcf = "";
+my $out = "";
+my $format = "epacts";
+my @types = ();
+my $nonsyn = "";
+my $pass = "";
+my $typefield = "";
+my $genefield = "";
+
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+wGetOptions(
+    "-Generate gene-based input file for EPACTS group test",
+    "--Required Options",
+    "vcf=s",[\$vcf,
+	     "Input VCF file with annotation in INFO field"
+	     ],
+    "out=s",[\$out,
+	     "Output EPACTS group file",
+	     ],
+    "--Additional Options",
+    "format=s",[\$format,
+		"Annotation format (epacts,annovar,gatk,snpeff,chaos)",
+		"Annotation format. Default format is 'epacts', and following is accepted\n B<epacts>   : ANNO=[TYPE]:[GENE]\n B<annovar>  : ANNO=[TYPE]:[GENE]\n B<gatk>     : refSeq.functionalClass=[TYPE] & refseq.name2=[GENE]\n B<snpeff>   : SNPEFF_FUNCTIONAL_CLASS=[TYPE] & SNPEFF_GENE_NAME=[GENE]\n B<chaos>    : TYPE=[TYPE] & GENE=[GENE]",
+               ],
+    "type=s",[\@types,
+                "Functional type(s) to include",
+	      ],
+    "typefield=s",[\$typefield,
+		   "VCF INFO field to be used as functional class",
+		   "Custom field name in the VCF INFO field to be used as functional TYPE"
+		   ],
+    "genefield=s",[\$genefield,
+		   "VCF INFO field to be used as gene name",
+		   "Custom field name in the VCF INFO field to be used as gene name",
+		   ],
+    "nonsyn",[\$nonsyn,
+	      "Use predefined nonsynonymous SNP categories",
+	      "Use predefined sets of TYPE field to be considered as non-synonymous SNPs\n B<epacts>   : Nonsynonymous, Essential_Splice_Site, Normal_Splice_Site,Start_Loss, Stop_Loss, Stop_Gain\n B<annovar>  : nonsynonymous, stopgain, stoploss, splicing\n B<gatk>     : missense, nonsense, readthrough\n B<snpeff>   : MISSENSE, NONSENSE\n B<chaos>    : COMPLETE_GENE_DELETETION, PARTIAL_GENE_DELETION, WITHIN_GENE_DELETTION, MISSENSE_START, NONSENSE, FRAMESHIFT, DONOR_IN2, ACCEPTOR_N2, CREATE_ACCEPTER_IN15,READTHROUGH, MISSENSE"],
+    "pass",[\$pass,
+	    "Use PASS-filtered SNPs",
+	    "Ignore SNPs failed filter, and output only the SNPs with 'PASS' in the INFO field"
+	    ],
+    ) || wpod2usage(2);
+
+unless (  ( $vcf ) && ( $out) && ( ( $format ) || ( ( $typefield) && ( $genefield) ) ) && ( ( $#types >= 0 ) || $nonsyn ) ) {
+    print STDERR "ERROR: Missing required option\n";
+    wpod2usage(2);
+}
+
+if ( ($format) && ($typefield) && ($genefield) ) {
+    print STDERR "--typefield, --genefield are not compatible with --format";
+    wpod2usage(2);
+}
+
+my $epactsdir = "$FindBin::Bin/..";
+
+if ( $nonsyn ) {
+    if ( $#types >= 0 ) {
+	print STDERR "ERROR: Cannot use --nonsyn and --type options together\n";
+	wpod2usage(2);
+    }
+    if ( $format eq "epacts" ) {
+	@types = qw(Nonsynonymous Essential_Splice_Site Normal_Splice_Site Start_Loss Stop_Loss Stop_Gain); # or synonymous
+    }
+    elsif ( $format eq "umake" ) {
+	@types = qw(nonsynonymous stopgain stoploss splicing); # or synonymous
+    }
+    elsif ( $format eq "GATK" ) {
+	@types = qw(missense nonsense readthrough);  # or silent
+    }
+    elsif ( $format eq "snpeff" ) {
+	@types = qw(MISSENSE NONSENSE);  # or silent
+    }
+    elsif ( $format eq "chaos") {
+	@types = qw(COMPLETE_GENE_DELETION PARTIAL_GENE_DELETION WITHIN_GENE_DELETION MISSENSE_START NONSENSE FRAMESHIFT DONOR_IN2 ACCEPTOR_IN2 CREATE_ACCEPTOR_IN15 READTHROUGH MISSENSE); 
+    }
+    elsif ( $format eq "" ) {
+	print STDERR "ERROR: --nonsyn option is not compatible with --format option";
+    }
+}
+
+if ( $vcf =~ /.gz$/ ) {
+    open(IN,"$binzcat $vcf | $bincut -f 1-8 | $bingrep -v ^#|") || die "Cannot open file\n";
+}
+else {
+    open(IN,"$bincut -f 1-8 $vcf | $bingrep -v ^#|") || die "Cannot open file\n";
+}
+
+my %htypes = ();
+foreach my $t (@types) { $htypes{$t} = 1; }
+
+my %hgrp = ();
+while(<IN>) {
+    my @F = split(/[\t\r\n]/);
+    next if ( ( $pass ) && ( $F[6] ne "PASS" ) );
+    my ($type,$gene);
+    if ( ( $typefield ) && ( $genefield ) ) {
+	$type = $1 if ( /;$typefield=([^;:]+)/ );
+	$gene = $1 if ( /;$genefield=([^;:]+)/ );
+    }
+    elsif ( $format eq "epacts" ) {
+	($type,$gene) = ($1,$2) if ( /ANNO=([^:]+):([^:;]+)/ );
+    }
+    elsif ( $format eq "umake" ) {
+	($type,$gene) = ($1,$2) if ( /ANNO=([^:]+):([^:]+)/ );
+    }
+    elsif ( $format eq "chaos") {
+	$type = $1 if ( /;TYPE=([^;:]+)/ );
+	$gene = $1 if ( /;GENE=([^;:]+)/ );
+    }
+    elsif ( $format eq "snpeff" ) {
+	$type = $1 if ( /SNPEFF_FUNCTIONAL_CLASS=([^;]+)/ );
+	$gene = $1 if ( /SNPEFF_GENE_NAME=([^;]+);/)
+    }
+    elsif ( $format eq "GATK" ) {
+	$type = $1 if ( /refseq.functionalClass=([^;]+)/ );
+	$gene = $1 if ( /refseq.name2=([^;]+);/)
+    }
+    next if ( !defined($gene) );
+    if ( defined($htypes{$type}) ) {
+	my $marker = "$F[0]:$F[1]\_$F[3]/$F[4]";
+	my @genes = split(/[,\|]/,$gene);
+	my %hgenes = ();
+	foreach my $g (@genes) {
+	    unless ( defined($hgenes{$g}) ) {
+		$hgrp{$g} = [] unless ( defined($hgrp{$g}) );
+		push(@{$hgrp{$g}},$marker);
+		$hgenes{$g} = 1;
+	    }
+	}
+    }
+}
+close IN;
+
+my $n = 0;
+open(OUT,">$out") || die "Cannot open file\n";
+foreach my $grp (sort keys %hgrp) {
+    print OUT "$grp\t";
+    print OUT join("\t",@{$hgrp{$grp}});
+    print OUT "\n";
+    ++$n;
+}
+close OUT;
+
+print "Succesfully create group information for $n genes\n";

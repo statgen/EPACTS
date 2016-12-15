@@ -27,3 +27,18 @@
 *.exe
 *.out
 *.app
+
+## automake delated
+autom4te.cache
+autom4te.cache/*
+compile
+src/.deps/
+src/.deps/*
+
+# Binaries
+src/pEmmax
+src/vcfast
+src/chaps
+src/anno
+src/bgzip
+src/tabix

@@ -1,0 +1,92 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+use FindBin;
+use lib "$FindBin::Bin";
+
+use epacts qw($binzcat);
+
+my $man = 0;
+my $help = 0;
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+GetOptions("help|?" => \$help, 
+	   "man" => \$man,
+    ) || pod2usage(2);
+
+pod2usage(1) if $help;
+
+pod2usage(-verbose => 2) if $man;
+
+my @ins = @ARGV;
+my $epactsdir = "$FindBin::Bin/../";
+
+my ($chrom,$beg) = (0,0);
+my $headerPrinted = "";
+for(my $i=0; $i < @ins; ++$i) {
+    if ( $ins[$i] =~ /.gz$/ ) {
+	open(IN,"$binzcat $ins[$i] |") || die "Cannot open file\n";
+    }
+    else {
+	open(IN,$ins[$i]) || die "Cannot open file\n";
+    }
+    while(<IN>) {
+	if ( /^#/ ) {
+	    unless ( $headerPrinted ) {
+		print STDOUT $_;
+		$headerPrinted = 1;
+	    }
+	}
+	else {
+	    my ($chr2,$pos2) = split;
+	    if ( ( $chrom ne $chr2 ) || ( $pos2 >= $beg ) ) {  ## Do more specific checking and give proper warning
+		print STDOUT $_;
+		$chrom = $chr2;
+		$beg = $pos2;
+	    }
+	}
+    }
+    close IN;
+}
+
+__END__
+
+=head1 NAME
+
+epacts cat - Concatenate multiple EPACTS results.
+
+=head1 SYNOPSIS
+
+epacts cat [input1] [input2] [input3] ... 
+
+ Options (See details for more info):
+   -help       Print out brief help message
+   -man        Print the full documentation in man page style
+
+=head1 EPACTS WIKI DOCUMENTASTION
+
+ Visit http://genome.sph.umich.edu/wiki/EPACTS for detailed documentation
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-help>
+
+Print a brief help message and exits.
+
+=item B<-man>
+
+Prints the manual page and exits.
+
+=head1 DESCRIPTION
+
+B<epacts> is an efficient and flexible software pipelien for sequence-based
+genetic analysis. It takes VCF-formatted file as input and performs a wide
+variety of single variant and buden test. 
+
+Visit http://genome.sph.umich.edu/wiki/EPACTS for more detailed documentation
+
+=cut

@@ -1,0 +1,485 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Cwd;
+use FindBin;
+use File::Basename;
+use lib "$FindBin::Bin";
+use wGetOptions qw(wpod2usage wGetOptions);
+use epacts qw(@chrs @szchrs parsePheno readPedVcf $binR $binRscript $binrm $binmake installPackages forkExecWait getMosixCmd);
+
+my $vcf = "";
+my $pheno = "";
+my @covs = ();
+my $out = "";
+my $field = "GT";
+my $ped = "";
+my $unit = 500;  ## number of genes to process together
+my $minMAF = 1e-6;
+my $maxMAF = 0.05;
+my $minMAC = 1;
+my $minCallRate = 0.5;
+my $minRSQ = 0;
+my $test = "";  
+my $missing = "NA";
+my $groupf = "";
+my $scoref = "";
+my $sepchr = "";
+my $kinf = "";
+my $remlf = "";
+my $kinOnly = "";
+my $invNorm = "";
+my $mosixNodes = "";
+my $noplot = "";
+my $recessive = "";
+my $run = -1;
+my $skatOptimal = "";
+my $skatAdjust = "";
+my $skatFlat = "";
+my $beta = "1,25";
+my $restart;
+my $binaryFlag = 0;
+my $vntFlag = 0;
+my @condsnps = ();
+
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+wGetOptions(
+    "-EPACTS groupwise variant association test",
+    "--Required Options",
+    "vcf=s",[\$vcf,
+	     "Input VCF file (tabixed and bgzipped)",
+	     "Input VCF file to calculate kinship matrix from. The VCF file must be tabixed and bgzipped"
+	     ],
+    "ped=s",[\$ped,
+	     "Input PED file for phenotypes and covariates",
+	     "PED format file containing a phenotypes (--pheno) and covariates (--cov). By default, 6th column in the PED file will be used as phenotypes, if no --pheno is specified"
+	     ],
+    "out=s",[\$out,
+	     "Prefix of output files",
+	     "Prefix of output files to store EPACTS groupwise association results",
+	     ],
+    "test=s",[\$test,
+	      "Name of groupwise test",
+	      "Name of groupwise association test to use. Below are built-in tests, and additional test may be plugged in. See B<EPACTS wiki> page for more detailed comparisons.\n B<b.collapse> : Binary trait collapsing (CMC) score test by Li and Leal\n B<b.madsen>   : Binary trait Madsen-Browning frequency-weighted test\n B<b.wcnt>     : Binary trait Frequency-weighted score test\n B<q.reverse>  : QT/Binary trait reverse logistic regression\n B<q.wilcox>   : QT/Binary trait reverse regression wilcoxon test\n B<skat>       : QT/Binary trait SKAT/SKAT-O by Wu et al & Lee et al\n B<emmaxCMC>   : QT/Binary trait EMMAX collapsing test\n B<emmaxVT>    : QT/Binary trait EMMAX Variable Threshold test"
+	      ],
+    "groupf=s",[\$groupf,
+		"EPACTS marker group file",
+		"EPACTS marker group file that defines the groups of markers to be tested for EPACTS groupwise association. See B<epacts make-group> for details on how to produce the marker group file",
+		],
+    "--Key Options",
+    "pheno=s",[\$pheno,
+	       "Name of phenotype column from PED file",
+	       "Name of phenotype column from the PED file. The phenotype column name must match with either (1) the header of PED file, starting with #, or (2) the phenotype name provided by separate .dat file. If omitted, 6th column in the PED file will be used as phenotypes",
+	       ],
+    "cov=s",[\@covs,
+	     "Name of covariate column(s) from PED file",
+	     "Name of covariates from the PED file. Multiple use -cov options are allowed. By default, no covariate is assumed except for intercept",
+	     ],
+    "field=s",[\$field,
+	       "VCF's FORMAT field of genotypes or dosages",
+	       "VCF's FORMAT field entry to extract the genotype or dosage information. By default, 'GT' is used. If 'PL' or 'GL' field is specified, the genotype likelihoods will be converted into genotype dosages whenever needed",
+	       ],
+    "unit=i",[\$unit,
+	      "Number of groups for a parallel run",
+	      "The number of groups to run as a unit of parallelization. Default value is 500",
+	      ],
+    "scoref=s",[\$scoref,
+		"Functional score files to use",
+		"Genome-wide functional score file to use. The specific format of the score file is currently not documented, as this option is currently under development. Please contact the developer for the details",
+		],
+    "run=i",[\$run,
+	     "Run EPACTS immediately with specified # CPUs",
+	     "Automatically runs GNU make after creating the Makefile. If this is not set, the user must run GNU make separately for finishing the run",
+	     ],
+    "min-maf=f",[\$minMAF,
+		 "Minimum minor allele frequency (MAF) threshold",
+		 "Minimum minor allele frequency (MAF) threshold to include into groupwise association test. Default is 1e-6",
+		 ],
+    "min-mac=i",[\$minMAC,
+		 "Minimum minor allele count (MAC)",
+		 "Minimum minor allele acount (MAC) threshold to include into groupwise association test. Default is 1",
+		 ],
+    "max-maf=f",[\$maxMAF,
+		 "Maximum MAF of determining 'rare' variants",
+		 "Maximum minor allele frequency (MAF) threshold to be considered as 'rare' variant. Default is 0.05",
+		 ],
+    "min-callrate=f",[\$minCallRate,
+		      "Minimum call rate per variant",
+		      "Minimum call rate, which is the proportion of non-missing genotypes, to run groupwise association test",
+		      ],
+    "min-rsq=f",[\$minRSQ,
+		 "Minimum RSQ_HAT value per variant",
+		 "Minimum RSQ_HAT value (as a surrogate of imputatio quality) threshold for including in the groupwise test",
+		],
+    "sepchr",[\$sepchr,
+	      "Indicator that VCFs are separated by chromosomes",
+	      "Indicator of separated VCF by chromosomes. The VCF file name must contain chr1, chr2, chr3,....",
+	      ],
+    "cond=s",[\@condsnps,
+	      "Perform conditional association analysis",
+	      "Perform conditional association analysis by specifying a marker ID in the format of [CHR]:[POS]_[REF]/[ALT] format. Multiple --cond options are possible.",
+	      ],
+    "--Additional Options",
+    "missing=s",[\$missing,
+		 "String representing missing value",
+		 "String representing missing value. NA is by default",
+		 ],
+    "mosix-nodes=s",[\$mosixNodes,
+		     "Comma-separated list of MOSIX cluster nodes",
+		    ],
+    "no-plot",[\$noplot,
+	       "Skip producing the Manhattan and QQ plots",
+	       "Skip producing Manhanttan, QQ plots, and top association results",
+	      ],
+    "restart",[\$restart,
+	       "Ignore intermediate results and restart",
+	       "Ignore intermediate results and restart from scratch. Equivalent to running GNU make with -B option",
+	       ],
+    "inv-norm",[\$invNorm,
+		"Inverse-normal transformation of phenotypes",
+		"Perform inverse normal transformation (quantile normalization) of phenotypes before running association",
+	       ],
+    "--Options specific to EMMAX (q.emmax) test",
+    "kinf=s",[\$kinf,
+	      "Kinship file produced by epacts make-kin",
+	      "Kinship file produced by B<epacts make-kin>"
+	      ],
+    "remlf=s",[\$remlf,
+	      "REML file produced by other run of q.emmax",
+	      "REML file produced by other run of EMMAX (either single SNP or groupwise associations)",
+	       ],
+    "--Options specific to SKAT (skat) test",
+    "skat-o",[\$skatOptimal,
+	      "Run SKAT in optimal mode",
+	      "Run SKAT-O instead of original SKAT",
+	      ],
+    "skat-flat",[\$skatFlat,
+		 "Use a flat prior instead of beta(1,25)",
+		 "Use a flat prior, instead of the default prior beta(1,25)",
+		 ],
+    "skat-adjust",[\$skatAdjust,
+		   "Small sample size adjustment",
+		   "Perform small sample size adjustment",
+		   ],
+    "beta=s",[\$beta,
+	      "Use a beta prior (comma separated) instead of beta(1,25)",
+	      "Use a beta prior instead of beta(1,25). The arguments should be comma separated two numbers",
+	      ],
+    "--Options specific to CMD (b.collapse) test",
+    "recessive",[\$recessive,
+		 "Use recessive encoding of burden instead dominant",
+		 "Use recessive encoding of burden instead dominant encoding. Only recessive variants will be considered as carrier of burden. This option",
+		 ],
+    ) || wpod2usage(2);
+
+unless ( ( $vcf ) && ($test) && ($ped) && ($groupf) && ( $out ) ) {
+    print STDERR "ERROR: Missing required option\n";
+    wpod2usage(2);
+}
+
+## By default, select nsSNP, splci
+
+my $dir = (&getcwd());
+my $epactsdir = dirname($FindBin::Bin);
+#$epactsdir =~ s/\/[^\/]+$//;
+my $datadir = "$epactsdir/share/EPACTS";
+$out = "$dir/$out" unless ( $out =~ /^\// );
+$vcf = "$dir/$vcf" unless ( $vcf =~ /^\// );
+$kinf = "$dir/$kinf" unless ( ( $kinf eq "" ) || ( $kinf =~ /^\// ) );
+$remlf = "$dir/$remlf" unless ( $remlf eq "" || $remlf =~ /^\// );
+my $eigf = "";
+my $remlFlag = 1;
+my $emmaxFlag = ( ( $test =~ /emmax/ ) || ( $test eq "mmskat" ) );
+
+if ( ( $kinf eq "" ) && ( $test =~ /emmax/ ) ) {
+    print STDERR "ERROR: --test $test option must be used with -kinf parameter\n";
+}
+
+if ( $remlf ) {
+    die "Cannot open $remlf" unless ( -s $remlf );
+    $eigf = $remlf;
+    $eigf =~ s/\.reml$/.eigR/;
+    die "Cannot open $eigf" unless ( -s $eigf );	
+    $remlFlag = 0;
+}
+else {
+    $remlf = "$out.reml";
+    $eigf = "$out.eigR";
+    $remlFlag = 1;
+}
+
+#die "ERROR in installing R packages\n" if ( ! &installPackages() );
+die "Cannot parse beta value $beta. Must contain comma\n" unless ( $beta =~ /,/ );
+my ($betaA,$betaB) = split(/,/,$beta);
+
+###########################################################################################
+# PART I : Read VCF and PED file and write .ind, .phe, and .cov files
+###########################################################################################
+
+## preprocess input VCF files to get the list of individual IDS
+die "ERROR: Cannot open $vcf\n" unless ( -s $vcf );
+die "ERROR: Cannot open $vcf.tbi. The VCF file must be tabixed\n" unless ( -s "$vcf.tbi" );
+
+my ($rVcfIds,$rhPhes,$rhCovs,$isBinary) = &readPedVcf($epactsdir,$ped,$vcf,$missing,$pheno,\@covs,\@condsnps,$field);
+my @vcfIds = @{$rVcfIds};
+my %hPhes = %{$rhPhes};
+my %hCovs = %{$rhCovs};
+$binaryFlag = $isBinary;
+
+open(IND,">$out.ind") || die "Cannot open IND file $out.ind for writing\n";
+open(PHE,">$out.phe") || die "Cannot open PHE file $out.phe for writing\n";
+
+my $ncovs = ($#covs+1)+($#condsnps+1);
+if ( $ncovs > 0 ) { open(COV,">$out.cov") || die "Cannot open file\n"; }
+
+my $nInds = 0;
+for(my $i=0; $i < @vcfIds; ++$i) {
+    my $id = $vcfIds[$i];
+    if ( defined($hPhes{$id}) ) {
+	print IND "$id\t".($i+1)."\n";
+	print PHE "$id\t$hPhes{$id}\n"; 
+	print COV "$id\t".join("\t",@{$hCovs{$id}})."\n" if ( $ncovs > 0 );
+	++$nInds;
+    }
+}
+close IND;
+close PHE;
+close COV;
+
+print STDERR "Successfully written phenotypes and $ncovs covariates across $nInds individuals\n";
+
+if ( $invNorm ) {
+    print STDERR "Performing inverse normal transformation of phenotypes\n";
+    open(R,">$out.invNorm.R") || die "Cannot open file $out.invNorm.R for writing\n";
+    print R "n <- as.matrix(read.table('$out.phe')[,1])\n";
+    print R "y <- as.matrix(read.table('$out.phe')[,2])\n";
+    if ( $ncovs > 0 ) { print R "c <- as.matrix(read.table('$out.cov')[,-1])\n"; }
+    else { print R "c <- rep(1,length(y))\n"; }
+    print R "r <- lm(y~c)\$residual\n";
+    print R "rn <- qnorm((rank(r)-.5)/length(r))\n";
+    print R "write.table(cbind(n,rn),'$out.phe',row.names=F,col.names=F,quote=F,sep=\"\t\")\n";
+    print R "write.table(cbind(n,r),'$out.res',row.names=F,col.names=F,quote=F,sep=\"\t\")\n";
+    close R;
+    my $cmd = "$binRscript $out.invNorm.R --vanilla";
+    if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+    &forkExecWait($cmd);
+    #print "$cmd\n"; print `$cmd`;
+    #die "FATAL ERROR: Inverse normalization failed" if ( $? == -1 ); 
+    @covs = (); ## don't regress out covariates any more
+}
+
+$pheno = "$out.phe";
+my $cov = ( $ncovs > 0 ) ? "$out.cov" : "NULL";
+my $ind = "$out.ind";
+
+###########################################################################################
+# PART II : Parse group infomation to separate jobs into multiple batches
+###########################################################################################
+
+## read each group and run a buren test
+my @tgts = ();
+my @cmds = ();
+my @rms = ();
+my $line = "";
+open(GROUP,$groupf) || die "Cannot open group information $groupf\n";
+
+if ( ( $test eq "emmaxCMC" ) || ( $test eq "emmaxVT" ) || ( $test eq "VT" ) ) {
+    for(my $i=0; defined($line); ++$i) {
+	print STDERR "Processing batch run $i..\n";
+	my $op = "$out.$i";
+	my $tgt = "$op.epacts";
+	open(OUT,">$op.grp") || die "Cannot open file\n";
+	for(my $j=0; ($j < $unit); ++$j) {
+	    $line = <GROUP>;
+	    last unless ( defined($line) );
+	    print OUT $line;
+	}
+	close OUT;
+
+	my $cmd;
+	if ( $test eq "emmaxCMC") {
+	    $cmd = "$epactsdir/bin/pEmmax burden-assoc --groupf $op.grp ".(($sepchr) ? "--sepchr" : "")." --vcf $vcf --phenof $pheno --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --minMAC $minMAC --minRSQ $minRSQ --minCallRate $minCallRate";
+	}
+	elsif ( $test eq "emmaxVT") {
+	    $cmd = "$epactsdir/bin/pEmmax MMVT --groupf $op.grp ".(($sepchr) ? "--sepchr" : "").(($scoref) ? " --scoref $scoref " : "")." --vcf $vcf --phenof $pheno --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --minMAC $minMAC --minRSQ $minRSQ --minCallRate $minCallRate;"
+	}
+	elsif ( $test eq "VT" ) {
+	    $cmd = "$epactsdir/bin/pEmmax VT --groupf $op.grp ".(($sepchr) ? "--sepchr" : "").(($scoref) ? " --scoref $scoref " : "").($recessive ? " --recessive " : "").(($ncovs > 0 ) ? " --covf $cov" : "")." --vcf $vcf --phenof $pheno --out-assocf $tgt --out-variantf $tgt.vnts --minMAF $minMAF --maxMAF $maxMAF --minMAC $minMAC --minRSQ $minRSQ --minCallRate $minCallRate";
+
+	}
+	if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+	push(@tgts,$tgt);
+	push(@cmds,$cmd);
+	push(@rms,"$op.grp");
+    }
+}
+else {
+    for(my $i=0; defined($line); ++$i) {
+	my @groups = ();
+	my @gnames = ();
+	my @regions = ();
+	for(my $j=0; ($j < $unit); ++$j) {
+	    $line = <GROUP>;
+	    last unless defined($line);
+	    
+	    ## parse the marker ID information into 1Mb regions
+	    my ($group,@markerids) = split(/[\s\t\r\n]+/,$line); ## assume that the marker IDs are ordered by chrs
+	    my ($curChrom,$beg,$end);
+	    foreach my $markerid (@markerids) {
+		my ($chrom,$bp) = split(/[:_]/,$markerid);
+		if ( defined($curChrom) ) {
+		    if ( $curChrom eq $chrom ) {
+			$beg = ($beg < $bp) ? $beg : $bp;
+			$end = ($end > $bp) ? $end : $bp;
+		    }
+		    else {
+			$curChrom = "multichrs";
+			$beg = 0;
+			$end = 0;
+		    }
+		}
+		else {
+		    $curChrom = $chrom;
+		    $beg = $bp;
+		    $end = $bp;
+		}
+	    }
+	    push(@groups,\@markerids);
+	    push(@gnames,$group);
+	    push(@regions,"$curChrom:$beg-$end");
+	}
+	if ( $#groups >= 0 ) {
+	    my $nr = $#groups+1;
+	    my $op = "$out.$i";
+	    my $tgt = "$op.epacts";
+	    open(R,">$op.R") || die "Cannot open file\n";
+	    print R "phenof <- '$pheno'\n";
+	    if ( $ncovs > 0 ) {
+		print R "covf <- '$cov'\n";
+	    }
+	    else {
+		print R "covf <- NULL\n";
+	    }
+	    print R "indf <- '$ind'\n";
+	    print R "vcf <- '$vcf'\n";
+	    print R "outf <- '$op.epacts'\n";
+	    print R "field <- '$field'\n";
+	    print R "minAF <- $minMAF\n";
+	    print R "maxAF <- $maxMAF\n";
+	    print R "minAC <- $minMAC\n";
+	    print R "test <- 'group.$test'\n";
+	    print R "flip <- TRUE\n";
+	    print R "sepchr <- ".($sepchr ? "TRUE" : "FALSE")."\n";
+	    print R "gnames <- c(";
+	    for(my $j=0; $j < @groups; ++$j) {
+		print R "," if ( $j > 0 );
+		print R "'".($gnames[$j])."'";
+	    }
+	    print R ")\n";
+	    print R "regions <- c(";
+	    for(my $j=0; $j < @groups; ++$j) {
+		print R "," if ( $j > 0 );
+		print R "'".($regions[$j])."'";
+	    }
+	    print R ")\n";
+	    print R "vcf <- '$vcf'\n";
+	    #print R "kinf <- ".($kinf ? "'$kinf'" : "NULL")."\n";
+	    if ( $emmaxFlag ) {
+		print R "remlf <- ".($remlf ? "'$remlf'" : "NULL")."\n";
+		print R "eigf <- ".($eigf ? "'$eigf'" : "NULL")."\n";
+	    }
+	    print R "groups <- list(";
+	    for(my $j=0; $j < @groups; ++$j) {
+		print R "," if ( $j > 0 );
+		print R "list(";
+		for(my $k=0; $k <= $#{$groups[$j]}; ++$k) {
+		    print R "," if ( $k > 0 );
+		    print R "'".($groups[$j]->[$k])."'";
+		}
+		print R ")";
+	    }
+	    print R ")\n";
+	    print R "betas <- c($betaA,$betaB)\n";
+	    print R "skatFlat <- ".($skatFlat ? "TRUE" : "FALSE")."\n";
+	    print R "skatOptimal <- ".($skatOptimal ? "TRUE" : "FALSE")."\n";
+	    print R "skatAdjust <- ".($skatAdjust ? "TRUE" : "FALSE")."\n";
+	    print R "binaryFlag <- ".($binaryFlag ? "TRUE" : "FALSE")."\n";
+	    print R "setwd('$datadir')\n";
+	    print R "batch <- $i\n";
+	    print R "if ( !require(epactsR,lib.loc=paste(\"$epactsdir\",\"/lib/\",sep=\"\") ) ) {\n";
+	    print R "\tstop(\"Cannot find epactsR package\")\n";
+	    print R "}\n";
+	    print R "dyn.load(paste(\"$epactsdir/lib/epactsR/libs/epactsR\",.Platform\$dynlib.ext, sep=\"\"))\n";
+	    print R "bindir <- '$epactsdir'\n";
+	    print R "source('epactsGroup.R')\n";
+	    close R;
+	    my $cmd = "$binRscript $op.R --vanilla";
+	    if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+	    push(@tgts,$tgt);
+	    push(@cmds,$cmd);
+	    push(@rms,"$op.R");
+	}
+    }
+}
+
+open(MAK,">$out.Makefile") || die "Cannot open file\n";
+print MAK ".DELETE_ON_ERROR:\n\n";
+print MAK "all: $out.epacts.OK\n\n";
+print MAK "$out.epacts.OK: @tgts".($emmaxFlag ? " $remlf" : "" )."\n";
+if ( $#tgts >= 0 ) {
+    print MAK "\t(head -1 $tgts[0]; cat @tgts | grep -v ^#;) > $out.epacts\n";
+    if ( $vntFlag ) {
+	print MAK "\t(head -1 $tgts[0].vnts; cat ".join(".vnts ",@tgts).".vnts | grep -v ^#;) > $out.epacts.vnts\n";
+    }
+}
+print MAK "\trm @tgts @rms\n";
+unless ( $noplot ) {
+    print MAK "\t$epactsdir/bin/epacts-plot --in $out.epacts\n" if ( $#tgts > 0 );
+}
+print MAK "\ttouch $out.epacts.OK\n";
+print MAK "\n";
+
+if ( $emmaxFlag ) {
+    if ( $remlFlag ) {
+	print MAK "$remlf: $vcf $ped\n";
+	my $cmd = "$epactsdir/bin/pEmmax reml --phenof $pheno ".(($#covs >= 0) ? "--covf $cov" : " ")." --kinf $kinf --indf $ind --out-eigf $out.eigR --out-remlf $remlf";
+	if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+	print MAK "\t$cmd\n";
+	print MAK "\n";
+    }
+    else {
+	die "Cannot find $remlf\n" unless ( -s $remlf );
+	die "Cannot find $eigf\n" unless ( -s $eigf );
+    }
+}
+
+for(my $i=0; $i < @tgts; ++$i) {
+    print MAK "$tgts[$i]:".( $emmaxFlag ? " $remlf" : "")."\n";
+    print MAK "\t$cmds[$i]\n\n";
+}
+close MAK;
+
+print "Finished generating EPACTS Makefile\n";
+if ( $run < 0 ) {
+    print "EPACTS will run the with the following commond:\n";
+    print "\tmake -f $out.Makefile -j [# of parallel jobs]\n";
+    print "Or perform sanity checking using the following command:\n";
+    print "\tmake -f $out.Makefile -n\n";
+}
+elsif ( $run == 0 ) {
+    print "Running maximum parallel jobs of EPACTS\n";
+    my $cmd = "$binmake -f $out.Makefile -j ".(($restart) ? " -B" : "");
+    &forkExecWait($cmd);
+    #print "$cmd\n";
+    #print `$cmd`;
+    #die "FATAL ERROR: Error occured during groupwise test" if ( $? == -1 ); 
+}
+else {
+    print "Running $run parallel jobs of EPACTS\n";
+    my $cmd = "$binmake -f $out.Makefile -j $run".(($restart) ? " -B" : "");
+    &forkExecWait($cmd);
+    #print "$cmd\n";
+    #print `$cmd`;
+    #die "FATAL ERROR: Error occured during groupwise test" if ( $? == -1 ); 
+}

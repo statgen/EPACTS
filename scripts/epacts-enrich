@@ -1,0 +1,470 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Cwd;
+use FindBin;
+use File::Basename;
+use lib "$FindBin::Bin";
+use wGetOptions qw(wpod2usage wGetOptions);
+use epacts qw(@chrs @szchrs @cumszchrsMb parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrs readPedVcf $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binpfbtops $bingnuplot $binepstopdf $binsort tofpos fromfpos forkExecWait);
+use POSIX qw(log10);
+
+my $epactsdir = dirname($FindBin::Bin);
+my $datadir = "$epactsdir/share/EPACTS";
+my $prefix = "";  # epacts prefix, use p-values as z-score
+my $bedf = "";    # bed file containing the region information
+my $vcf = "";     # vcf file to calculate LD
+my $indf = "";    # subset of individuals to calculate LD
+my $locif = "";   # loci file for the peak SNP
+my $out = "";
+my $map = "$datadir/genetic_map_GRCh37_wgs.txt.gz";
+my $region = "";
+my $minr2 = ".5";
+my $cmext = ".02";
+my $win = 1000000;
+my $maxShift = 2*$win;
+my $sepchr = "";
+my $genef = "$datadir/hg19_refFlat.txt.gz";
+my $pThres = 1e-5;
+my $nperm = 1000;
+my $cellType = "";
+my $rule = "";
+my $tabix = "$epactsdir/bin/tabix";
+
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+wGetOptions(
+    "-EPACTS Functional Enrichment Analysis",
+    "--Required Options",
+    "prefix=s",[\$prefix,
+		"Output prefix of EPACTS single variant association",
+		],
+    "--Key Options",
+    "bed=s",[\$bedf,
+	     "Bed file(s) containg different functional labels",
+	     ],
+    "bedlist=s",[\$bedlistf,
+		 "List of BED files to test",
+		 ],
+    "loci=s",[\$locif,
+	      "Predefined set of loci",
+	      ],
+    "max-shift=i",[\$maxShift,
+		   ],
+    "p-thres=f",[\$pThres,
+		 ],
+    "nperm=i",[\$nperm,
+	       ],
+    "cell=s",[\$cellType,
+	      ],
+    "rule=s",[\$rule,
+	      ],
+    "--Options for later use",
+    "vcf=s",[\$vcf,
+	     "Input VCF file",
+    "ind=s",[\$indf,
+	     "Individual IDs",
+	     ],
+    "sepchr",[\$sepchr,
+	      ],
+    ) || pod2usage(2);
+
+wpod2usage(1) if $help;
+
+wpod2usage(-verbose => 2) if $man;
+
+if ( $cellType ) {
+    $bedf = ($cellType =~ /.gz$/) ? $cellType : "$datadir/wgEncodeBroadHmm$cellType"."HMM.bed.gz";
+}
+
+unless ( ( $prefix ) && ( $vcf ) && ( $bedf ) ) {
+    print STDERR "Missing at least one required options, --prefix, --vcf, --bed / --cell\n";
+    pod2usage(2);
+}
+
+unless ( ( -s $vcf ) && ( -s "$vcf.tbi" ) ) { print STDERR "Cannot read $vcf and $vcf.tbi\n"; }
+
+unless ( ( -s $bedf ) && ( -s "$bedf.tbi" ) ) { print STDERR "Cannot read $bedf and $bedf.tbi\n"; }
+
+unless ( ( -s $map ) && ( -s "$map.tbi" ) ) { print STDERR "Cannot read $map and $map.tbi\n"; }
+
+## Determine loci to focus on
+my @fposs = ();
+my @pvals = ();
+my @peaks = ();
+
+die "Cannot open $prefix.epacts.gz\n" unless ( -s "$prefix.epacts.gz" );
+print STDERR "Scanning $prefix.epacts.gz to identify peaks at p-value < $pThres..\n";
+if ( $region ) {
+    die "Cannot open $prefix.epacts.gz.tbi\n" unless ( -s "$prefix.epacts.gz.tbi" );
+    open(IN,"$tabix -h $prefix.epacts.gz $region |") || die "Cannot open $prefix.epacts.gz";
+}
+else {
+    open(IN,"zcat $prefix.epacts.gz |") || die "Cannot open $prefix.epacts.gz";
+}
+my @headers = split(/\s+/,<IN>);
+my $ipval;
+my $ibeta;
+for(my $i=0; $i < @headers; ++$i) {
+    if ( $headers[$i] =~ /^PVALUE/ ) {
+	$ipval = $i;
+    }
+    if ( ( $headers[$i] =~ /^ZSCORE/ ) || ( $headers[$i] =~ /^BETA/ ) ) {
+	$ibeta = $i;
+    }
+}
+
+die "Cannot find PVALUE and ZSCORE|BETA columns\n" unless ( defined($ipval) && defined($ibeta) );
+
+while(<IN>) {
+    print STDERR "Processing $. markers..\n" if ( $. % 1000000 == 0 );
+    my @F = split;
+    my $fpos = &tofpos($F[0],$F[1]);
+    if ( ( $F[$ipval] ne "NA" ) && ( $F[$ipval] ne "." ) ) {
+	push(@fposs,$fpos);
+	push(@pvals,$F[$ibeta] > 0 ? $F[$ipval] : 0-$F[$ipval]);
+	if ( $F[$ipval] < $pThres ) {  ## if p-value is smaller than threshold, identify peaks
+	    if ( $#peaks >= 0 ) {
+		if ( abs($fposs[$peaks[$#peaks]] - $fpos) < $win/1e6 ) {
+		    if ( abs($pvals[$peaks[$#peaks]]) > $F[$ipval] ) {
+			$peaks[$#peaks] = $#fposs;
+		    }
+		}
+		else {
+		    push(@peaks,$#fposs);
+		}
+	    }
+	    else {
+		push(@peaks,$#fposs);
+	    }
+	}
+    }
+}
+close IN;
+
+print STDERR "Identified ".($#peaks+1)." peak SNPs at p-value < $pThres\n";
+for(my $i=0; $i < @peaks; ++$i) {
+    my $j = $peaks[$i];
+    printf STDERR ("%s:%d\t%.3lg\t%s\n",&fromfpos($fposs[$j]),abs($pvals[$j]),$pvals[$j] > 0 ? "+" : "-");
+}
+
+## Processes each peak SNP separately
+for(my $ip=0; $ip < @peaks; ++$ip) {
+    my $isnp = $peaks[$ip];
+    ## Determine the boundary
+    my ($chr,$indexbp) = &fromfpos($fposs[$isnp]);
+    my $cvcf = $vcf;
+    $cvcf =~ s/chr1\./chr$chr\./ if ( $sepchr );
+    
+    ## Retrieve genetic map information around the window
+    my ($start,$end);
+    $start = ($indexbp > $win) ? ($indexbp-$win) : 0;
+    $end = $indexbp+$win;
+    $region = "$chr:$start-$end";
+    
+    my @mapPos = ();
+    my @mapCMs = ();
+    open(IN,"$epactsdir/bin/tabix $map $region|") || die "Cannot open $map file\n";
+    while(<IN>) {
+	my ($chrom,$bp,$rate,$cM) = split;
+	push(@mapPos,$bp);
+	push(@mapCMs,$cM);
+    }
+    close IN;
+    
+    my $indexcm;
+    for(my $i=0; $i < @mapPos; ++$i) {
+	if ( $mapPos[$i] eq $indexbp ) {
+	    $indexcm = $mapCMs[$i]
+	}
+	elsif ( $mapPos[$i] < $indexbp ) {
+	    $indexcm = $mapCMs[$i];
+	}
+	elsif ( $mapPos[$i] > $indexbp ) {
+	    if ( $mapPos[$i-1] < $indexbp ) {
+		$indexcm += ($indexbp-$mapPos[$i-1])/($mapPos[$i]-$mapPos[$i-1])*($mapCMs[$i]-$mapCMs[$i-1]);
+	    }
+	}
+    }
+
+    my $fstart = &tofpos($chr,$start);
+    my $fend = &tofpos($chr,$end);
+
+    my $istart = $isnp;
+    my $iend = $isnp;
+    while ( ( $istart > 0 ) && ( $fposs[$istart] > $fstart ) ) { --$istart; }
+    while ( ( $iend < $#fposs ) && ( $fposs[$iend] < $fend ) ) { ++$iend; }
+    ++$istart;
+    --$iend;
+
+    print STDERR "$chr $indexbp $region\n";
+
+    next if ( ( $chr eq "9" ) && ( $indexbp == 71849497 ) ); # temporary
+
+    #print "$epactsdir/bin/vcfast index-LD --vcf $cvcf --region $region ".($indf ? " --indf $indf" : "").($sepchr ? "--sepchr" : "")." --index $chr:$indexbp ".($rule ? " --rule \"$rule\"" : "")." --min-r2 0.0001 --out - 2> /dev/null |\n";
+    open(RS,"$epactsdir/bin/vcfast index-LD --vcf $cvcf --region $region ".($indf ? " --indf $indf" : "").($sepchr ? "--sepchr" : "")." --index $chr:$indexbp ".($rule ? " --rule \"$rule\"" : "")." --min-r2 0.0001 --out - 2> /dev/null |") || die "Cannot run vcfast index-LD on $chr:$indexbp\n";
+    my @rs = ();
+    my @afs = ();
+    my @tmpfpos = ();
+    my $j = $istart;
+    my ($bstart,$bend) = ($iend,$istart);
+    for(my $i=0; <RS>; ++$i) {
+	next if ( /^#/ );
+	#print STDERR "Reading $i SNPs..\n" if ( $i % 1000 == 0 );
+	my ($chr,$pos,$id,$ref,$alt,$af,$r2,$r) = split(/[\t\r\n]+/);
+	next if ( ( length($ref) > 1 ) || ( length($alt) > 1 ) ); ## Consider SNPs only
+	my $fpos = &tofpos($chr,$pos);
+
+	while( ( $j < $iend ) && ( $fpos > $fposs[$j] ) ) { 
+	    #print STDERR "Missing $fpos.. in r2 map. Assuming zero\n";
+	    push(@rs,0);
+	    push(@afs,0);
+	    push(@tmpfpos,$fposs[$j]);
+	    ++$j; 
+	}
+	if ( $fpos < $fposs[$j] ) {
+	    #print STDERR "Skipping.. $fpos $fposs[$j]\n";
+	    next;
+	}
+	die "ERROR: Mismatch in positions $id $fpos $fposs[$j]\n" unless ( $fpos == $fposs[$j] );
+
+	if ($r2 > $minr2 ) {
+	    $bstart = $j if ( $bstart > $j );
+	    $bend = $j if ( $bend < $j );
+	}
+	push(@rs,$r);
+	push(@afs,$af);
+	push(@tmpfpos,$fpos);
+	++$j;
+    }
+    close RS;
+
+    $iend = $istart + $#rs;
+    #for(my $i=0; $i < @tmpfpos; ++$i) {
+	#print STDERR "$i $fposs[$i+$istart] $tmpfpos[$i] $rs[$i] $afs[$i]\n";
+	#die unless ( $fposs[$i+$istart] == $tmpfpos[$i] );
+    #}
+
+    #die "$#rs $istart $iend\n" unless ( $#rs == $iend-$istart );
+
+    if ( $bstart > $bend ) {
+	print STDERR "Cannot find index SNP $chr:$indexbp from VCF. Skipping..\n";
+	next;
+    }
+
+    ### Extend boundary by certain genetic distance
+    my ($mincm,$maxcm) = (0,0);
+    my ($dummy1, $minPos) = &fromfpos($fposs[$bstart]);
+    my ($dummy2, $maxPos) = &fromfpos($fposs[$bend]);
+    for(my $i=0; $i < @mapPos; ++$i) {
+	if ( $mapPos[$i] eq $minPos ) {
+	    $mincm = $mapCMs[$i];
+	}
+	elsif ( $mapPos[$i] < $minPos ) {
+	    $mincm = $mapCMs[$i];
+	}
+	elsif ( $mapPos[$i] > $minPos ) {
+	    if ( $mapPos[$i-1] < $minPos ) {
+		$mincm += ($minPos-$mapPos[$i-1])/($mapPos[$i]-$mapPos[$i-1])*($mapCMs[$i]-$mapCMs[$i-1]);
+	    }
+	}
+	if ( $mapPos[$i] eq $maxPos ) {
+	    $maxcm = $mapCMs[$i];
+	}
+	elsif ( $mapPos[$i] < $maxPos ) {
+	    $maxcm = $mapCMs[$i];
+	}
+	elsif ( $mapPos[$i] > $maxPos ) {
+	    if ( $mapPos[$i-1] < $maxPos ) {
+		$maxcm += ($maxPos-$mapPos[$i-1])/($mapPos[$i]-$mapPos[$i-1])*($mapCMs[$i]-$mapCMs[$i-1]);
+	    }
+	}
+    }
+    my ($minExPos,$maxExPos) = ($minPos,$maxPos);
+    for(my $i=0; $i < @mapPos; ++$i) {
+	if ( $mapCMs[$i] > $mincm - $cmext ) {
+	    $minExPos = $mapPos[$i] if ( $minExPos > $mapPos[$i] );
+	}
+	if ( $mapCMs[$i] < $maxcm + $cmext ) {
+	    $maxExPos = $mapPos[$i] if ( $maxExPos < $mapPos[$i] );
+	}
+    }
+
+    my $fexstart = &tofpos($chr,$minExPos);
+    my $fexend = &tofpos($chr,$maxExPos);
+
+    while ( ( $bstart > 0 ) && ( $fposs[$bstart] > $fexstart ) ) { --$bstart; }
+    while ( ( $bend < $#fposs ) && ( $fposs[$bend] > $fexend ) ) { --$bend; }
+
+    ## calculate posterior probability
+
+    open(DAT,">$out.dat") || die "Cannot open $out.dat for writing\n";
+    for(my $i=$istart; $i <= $iend; ++$i) {
+	print DAT join("\t",&fromfpos($fposs[$i]),$pvals[$i],$rs[$i-$istart]);
+	print DAT "\n";
+    }
+    close DAT;
+
+    my $peakp = $pvals[$isnp];
+
+    open(R,">$out.r") || die "Cannot open $out.r for writing\n";
+    print R "M <- as.matrix(read.table('$out.dat'))\n";
+    print R "zs <- sign(M[,3]) * qnorm(abs(M[,3]),lower.tail=FALSE)\n";
+    print R "z.index <- sign($peakp) * qnorm(abs($peakp),lower.tail=FALSE)\n";
+    print R "rs <- M[,4]\n";
+    print R "n <- nrow(M)\n";
+    print R "nums <- exp(0-(z.index-rs*zs)^2/2/(1-rs^2))\n";
+    print R "dens <- exp(0-(rs*z.index-zs)^2/2/(1-rs^2))\n";
+    print R "ratios <- nums/dens\n";
+    print R "ratios[abs(rs)==1] <- 1\n";
+    print R "ratios[which(is.nan(ratios))] <- 0\n";
+    print R "post <- ratios/sum(ratios)\n";
+    print R "write.table(cbind(M[,1:2],post),'$out.post',row.names=F,col.names=F)\n";
+    close R;
+
+    my $cmd = "$binRscript --vanilla $out.r";
+    &forkExecWait($cmd);
+
+    $cmd = "$epactsdir/bin/vcfast peak-shift --score $out.post --bed $bedf --region $chr:$minExPos-$maxExPos --out $out.enrich.$chr.$indexbp --ucsc --nperm $nperm --win $win --max-shift $maxShift";
+    &forkExecWait($cmd);
+}
+
+## Read inputs and merge p-values
+my %hrndps = ();
+for(my $ip=0; $ip < @peaks; ++$ip) {
+    my $isnp = $peaks[$ip];
+    ## Determine the boundary
+    my ($chr,$indexbp) = &fromfpos($fposs[$isnp]);
+    open(IN,"$out.enrich.$chr.$indexbp") || next;
+    while(<IN>) {
+	next if ( /^#/ );
+	my @F = split;
+	$hrndps{$F[0]} = [] unless ( defined($hrndps{$F[0]}) );
+	push(@{$hrndps{$F[0]}},$F[$#F]);
+    }
+    close IN;
+}
+
+my @krndps = sort keys %hrndps;
+my $nkrndps = $#krndps+1;
+open(R,">$out.r") || die "Cannot open $out.r for writing\n";
+print R "Z <- matrix(NA,$nkrndps,3)\n";
+print R "colnames(Z) <- c('n','z','p')\n";
+print R "rownames(Z) <- c('".join("','",@krndps)."')\n";
+for(my $i=0; $i < @krndps; ++$i) {
+    print R "ps <- c(".join(",",@{$hrndps{$krndps[$i]}}).")\n";
+    print R "n <- length(ps)\n";
+    print R "zs <- qnorm(ps,lower.tail=FALSE)\n";
+    print R "z <- sum(zs)/sqrt(n)\n";
+    print R "p <- pnorm(z,lower.tail=FALSE)\n";
+    print R "Z[".($i+1).",] <- c(n,z,p)\n";
+}
+print R "write.table(Z,'$out',sep='\t',quote=F)\n";
+close R;
+
+my $cmd = "$binRscript --vanilla $out.r";
+&forkExecWait($cmd);
+
+__END__
+
+=head1 NAME
+
+epacts zoom - Produce locus zoom plot for EPACTS results
+
+=head1 SYNOPSIS
+
+epacts zoom [options] 
+
+ Options (See details for more info):
+
+ Required Options (See details for more info):
+   -vcf STR      VCF file to calculate MAF and LD (snpid must present)
+   -prefix STR   Prefix of EPACTS output
+
+ Key Options 
+   -help         Print out brief help message [OFF]
+   -man          Print the full documentation in man page style [OFF]
+   -pos STR      Variant position in the format of [CHROM]:[POS] []
+   -top INT      Number of top associated signals to plot[]
+   -out STR      Output prefix [-in]
+   -map STR      Genetic map file [ext/genetic_map_GRCh37_wgs.txt.gz]
+   -indf STR     File with a set of IDs to calculate LD [-prefix.phe]
+   -minr2 FLT    Minimum r2 threshold to determine boundary [.5]
+   -cmext FLT    Centimorgan to extend beyond the boundary [.02]
+   -win INT      Base pair to extend beyond the focal SNP [300000]
+
+=head1 EPACTS WIKI DOCUMENTASTION
+
+ Visit http://genome.sph.umich.edu/wiki/EPACTS for detailed documentation
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-help>
+
+Print a brief help message and exits.
+
+=item B<-man>
+
+Prints the manual page and exits.
+
+=item B<-vcf> STR (Required)
+
+Input VCF file (primarily to calculate r2)
+
+=item B<-prefix> STR (Required)
+
+Prefix of EPACTS output containing single variant association results. 
+
+=item B<-pos> STR
+
+Variant position in the format of [CHROM]:[POS]. Either -top or -pos should be used.
+
+=item B<-top> INT
+
+Number of top associated signal to plot. Either -top or -pos should be used.
+
+=item B<-out> STR
+
+Prefix of EPACTS output file to store the output zoom plots.
+
+=item B<-map> STR
+
+Genetic map file containing the recombination rate information. By default, $(EPACTS_DIR)/ext/genetic_map_GRCh37_wgs.txt.gz is used.
+
+=item B<-indf> STR
+
+File containing a set of IDs to calculate LD. Default value is $(PREFIX).phe
+
+=item B<-minr2> FLT
+
+Minimum r2 value to extend from the focal variant
+
+=item B<-cmext> FLT
+
+Centimorgan to extend beyond the boundary. Default value is 0.02
+
+=item B<-win> INT
+
+Maximum window size beyond the focal SNP
+
+=item B<-region> STR
+
+[chr]:[beg]-[end] formatted string to specify genomic region to plot
+
+=item B<-sepchr>
+
+Indicator that VCF file is separated by chromosome. If this option is used, VCF file must point to the chr1 file.
+
+=back
+
+=head1 DESCRIPTION
+
+B<epacts> is an efficient and flexible software pipelien for sequence-based
+genetic analysis. It takes VCF-formatted file as input and performs a wide
+variety of single variant and buden test. 
+
+Visit http://genome.sph.umich.edu/wiki/EPACTS for more detailed documentation
+
+=cut

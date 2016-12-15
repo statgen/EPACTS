@@ -1,0 +1,48 @@
+# Priority file
+# * higher priority is listed before low priority
+
+# large strucutre variant
+StructuralVariation
+
+# indels
+Stop_Gain
+Stop_Loss
+Start_Gain
+Start_Loss
+
+Frameshift        /* Indel length is not divisible by 3 */					    
+CodonGain	  /* Insertion length is divisible by 3 */					    
+CodonLoss	  /* Deletion length is divisible by 3 */					    
+CodonRegion	  /* Just say the variant is in the Coding Region used in Structrual Varition*/
+
+Insertion
+Deletion
+
+# single variants
+Nonsynonymous
+Synonymous
+Essential_Splice_Site
+Normal_Splice_Site
+
+Utr5
+Utr3
+Exon
+Intron
+Upstream
+Downstream
+SNV		/*SNV contains the following 6 types it appears when there is no reference.*/
+
+# not important
+Noncoding
+
+# not import
+Intergenic
+
+
+
+
+
+
+
+
+

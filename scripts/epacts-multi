@@ -1,0 +1,485 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Cwd;
+use FindBin;
+use File::Basename;
+use lib "$FindBin::Bin";
+use wGetOptions qw(wpod2usage wGetOptions);
+use epacts qw(@chrs @szchrs parsePheno readPedVcf readPedVcfMulti $binR $binRscript $binrm $binmake $binawk $defaultfasta installPackages %ichrs forkExecWait getMosixCmd);
+
+my $vcf = "";
+my @phenos = ();
+my @covs = ();
+my $out = "";
+my $chr = "";
+my $bprange = "";
+my $field = "GT";
+my $ped = "";
+my $unit = 10000000;
+my $minMAF = 1e-6;
+my $maxMAF = 1;
+my $maxMAC = 1e9;
+my $minMAC = 3;
+my $minCallRate = 0.5;
+my $minRSQ = 0;
+my $test = "";  
+my $pass = "";
+my $rule = "";
+my $missing = "NA";
+my $sepchr = "";
+my $anno = "";
+my $kinf = "";
+my $remlf = "";
+my $invNorm = "";
+my $mosixNodes = "";
+my $run = -1;
+my $restart = "";
+my $ref = "";
+my @condsnps = ();
+my $callregion = "";
+my $maxP = 1;
+my $compact = "";
+
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+wGetOptions(
+    "-EPACTS single variant association test with multiple phenotypes",
+    "--Required Options",
+    "vcf=s",[\$vcf,
+	     "Input VCF file (tabixed and bgzipped)",
+	     "Input VCF file to calculate kinship matrix from. The VCF file must be tabixed and bgzipped"
+	     ],
+    "ped=s",[\$ped,
+	     "Input PED file for phenotypes and covariates",
+	     "PED format file containing a phenotypes (--pheno) and covariates (--cov). By default, 6th column in the PED file will be used as phenotypes, if no --pheno is specified"
+	     ],
+    "out=s",[\$out,
+	     "Prefix of output files",
+	     "Prefix of output files to store EPACTS groupwise association results",
+	     ],
+    "test=s",[\$test,
+	      "Name of single variant association test to use",
+	      "Name of statistical test to use. Below are built-in tests, and additional test may be plugged in. See wiki page for more detailed comparisons\n B<q.linear> : QT/Binary linear model (faster version using regress-out)\n B<q.reverse>: QT/Binary reverse logistic regression\n B<q.emmax>  : QT/Binary EMMAX test correcting for kinship",
+	      ],
+    "--Key Options",
+    "pheno=s",[\@phenos,
+	       "Name of phenotype column(s) from PED file",
+	       "Name of phenotype column from the PED file. The phenotype column name must match with either (1) the header of PED file, starting with #, or (2) the phenotype name provided by separate .dat file. If omitted, 6th column in the PED file will be used as phenotypes. Multiple use of -pheno options are allowed. If -pheno option is omitted, it will use select phenotypes (except for ones selected in -cov option)",
+	       ],
+    "cov=s",[\@covs,
+	     "Name of covariate column(s) from PED file",
+	     "Name of covariates from the PED file. Multiple use -cov options are allowed. By default, no covariate is assumed except for intercept",
+	     ],
+    "chr=s",[\$chr,
+	     "Run only a single chromosome",
+	     "Runing only a single chromosome, instead of running all autosomal chromosomes to calculate the kinship matrix",
+	     ],
+    "field=s",[\$field,
+	       "VCF's FORMAT field of genotypes or dosages",
+	       "VCF's FORMAT field entry to extract the genotype or dosage information. By default, 'GT' is used. If 'PL' or 'GL' field is specified, the genotype likelihoods will be converted into genotype dosages whenever needed",
+	       ],
+    "unit=i",[\$unit,
+	      "Size of region in base pair for each parallelized run",
+	      "Size of region in base pair to run as a unit of parallelization. Default value is 1Mb",
+	      ],
+    "min-maf=f",[\$minMAF,
+		 "Minimum minor allele frequency (MAF) threshold",
+		 "Minimum minor allele frequency (MAF) threshold to run single variant association test. Default is 1e-6",
+		 ],
+    "max-maf=f",[\$maxMAF,
+		 "Maximum minor allele frequency (MAF) theshold",
+		 "Maximum minor allele frequency (MAF) threshold to run single variant association test Default is 1",
+		 ],
+    "min-mac=i",[\$minMAC,
+		 "Minimum minor allele count (MAC)",
+		 "Minimum minor allele acount (MAC) threshold to run single variant association test. Default is 1",
+		 ],
+    "min-callrate=f",[\$minCallRate,
+		      "Minimum call rate per variant",
+		      "Minimum call rate, which is the proportion of non-missing genotypes, to run single variant association test",
+		      ],
+    "missing=s",[\$missing,
+		 "String representing missing value",
+		 "String representing missing value. NA is by default",
+		 ],
+    "run=i",[\$run,
+	     "Run EPACTS immediately with specified # CPUs",
+	     "Automatically runs GNU make after creating the Makefile. If this is not set, the user must run GNU make separately for finishing the run",
+	     ],
+    "restart",[\$restart,
+	       "Ignore intermediate results and restart",
+	       "Ignore intermediate results and restart from scratch. Equivalent to running GNU make with -B option",
+	       ],
+    "sepchr",[\$sepchr,
+	      "Indicator that VCFs are separated by chromosomes",
+	      "Indicator of separated VCF by chromosomes. The VCF file name must contain chr1, chr2, chr3,....",
+	      ],
+    "anno",[\$anno,
+	    "Annotate each variant in the output",
+	    "Annotate each variant in the output. The marker ID will be formatted in [CHR]:[POS]_[REF]/[ALT]_[FUNC]:[GENE]",
+	    ],
+    "inv-norm",[\$invNorm,
+		"Inverse-normal transformation of phenotypes",
+		"Perform inverse normal transformation (quantile normalization) of phenotypes before running association",
+		],
+    "cond=s",[\@condsnps,
+	      "Perform conditional association analysis",
+	      "Perform conditional association analysis by specifying a marker ID in the format of [CHR]:[POS]_[REF]/[ALT] format. Multiple --cond options are possible.",
+	      ],
+    "max-pvalue=f",[\$maxP,
+		    "Maximum p-value threshold to output association results",
+		    "Maximum p-value threshold to output association results. To output all association results, use --max-pvalue=1 option",
+		    ],
+    "compact",[\$compact,
+	       "Output the results in a compact format, only under maxP",
+	       ],
+    "--Other Options",
+    "pass",[\$pass,
+	    "Use only PASS filter variants",
+	    "Use only PASS filter variants for single variant association test",
+	    ],
+    "max-mac=i",[\$maxMAC,
+		 "Maximum minor allele count (MAC)",
+		 "Maximum minor allele acount (MAC) threshold to run single variant association test. Default is a very large number",
+		 ],
+    "min-rsq=f",[\$minRSQ,
+		 "Minimum RSQ_HAT value per variant",
+		 "Minimum RSQ_HAT value (as a surrogate of imputatio quality) threshold for including in the single variant association test",
+		 ],
+    "ref=s",[\$ref,
+	     "Reference FASTA file for --anno option",
+	     "Reference FASTA file with index (.fai). Required for --anno option. Default is GRCh37 reference sequence (but you may need to run B<epacts download> first if you do not have local copy)",
+	     ],
+    "region=s",[\$callregion,
+		"Subset of genomic regions to run association",
+		"Subset of genomic regions to run association. Must be in [CHR]:[BEG]-[END]",
+		],
+    "mosix-nodes=s",[\$mosixNodes,
+		     "Comma-separated list of MOSIX cluster nodes",
+		    ],
+    "rule=s",[\$rule,
+	      "Substring in the INFO field to be matched",
+	      "Option to select a subset of variants based on INFO field. This select only the variants with particular subseting included in the VCF",
+	      ],
+    "--Options specific to EMMAX (q.emmax) test",
+    "kinf=s",[\$kinf,
+	      "Kinship file produced by epacts make-kin",
+	      "Kinship file produced by B<epacts make-kin>"
+	      ],
+    "remlf=s",[\$remlf,
+	      "REML file produced by other run of q.emmax",
+	      "REML file produced by other run of EMMAX (either single SNP or groupwise associations)",
+	       ],
+    ) || wpod2usage(2);
+
+unless ( ( $vcf ) && ( $test ) && ( $ped ) && ( $kinf || ( $test ne "q.emmax" ) ) && ( $out ) ) {
+    print STDERR "ERROR: Missing required option\n";
+    wpod2usage(2);
+}
+
+if ( $callregion ) {
+    die "--chr and --region cannot be used together\n" if ( $chr );
+    ($chr,$bprange) = split(/:/,$callregion);
+    die "Cannot parse $callregion\n" unless ( ( $chr ) && ( $bprange =~ /^\d+\-\d+$/ ) );
+}
+
+die "--compact option must be used with --max-pvalue\n" if ( ( $compact ) && ( $maxP == 1 ) );
+
+$minMAF = sprintf("%lg",$minMAF);
+$minCallRate = sprintf("%lg",$minCallRate);
+$minRSQ = sprintf("%lg",$minRSQ);
+
+my $dir = &getcwd();
+my $epactsdir = dirname($FindBin::Bin);
+#$epactsdir =~ s/\/[^\/]+$//;
+my $datadir = "$epactsdir/share/EPACTS";
+$out = "$dir/$out" unless ( $out =~ /^\// );
+$vcf = "$dir/$vcf" unless ( $vcf =~ /^\// );
+$kinf = "$dir/$kinf" unless ( ( $kinf eq "" ) || ( $kinf =~ /^\// ) );
+$remlf = "$dir/$remlf" unless ( $remlf eq "" || $remlf =~ /^\// );
+my $eigf = "";
+my $tryf = "";
+my $remlFlag = 1;
+
+$ref = $defaultfasta if ( $ref eq "" );
+
+die "ERROR: Cannot find FASTA reference file $ref or $ref.fai. Please specify the correct FASTA file or turn off the --anno option\n" if ( ($anno) && (! ( ( -s $ref ) && ( -s "$ref.fai" ) ) ) );
+
+if ( $remlf ) {
+    die "Cannot open $remlf for reading" unless ( -s $remlf );
+    $eigf = $remlf;
+    $eigf =~ s/\.reml$/.eigR/;
+    $tryf = $remlf;
+    $tryf =~ s/\.reml$/.tryf/;
+    die "Cannot open $eigf for reading" unless ( -s $eigf );	
+    die "Cannot open $tryf for reading" unless ( -s $tryf );	
+    $remlFlag = 0;
+}
+else {
+    $remlf = "$out.reml";
+    $eigf = "$out.eigR";
+    $tryf = "$out.tryf";
+    $remlFlag = 1;
+}
+
+
+############################################################################
+# PART I : Read VCF and PED file and write .ind, .phe, and .cov files
+############################################################################
+
+## preprocess input VCF files to get the list of individual IDS
+die "ERROR: Cannot open $vcf\n" unless ( -s $vcf );
+die "ERROR: Cannot open $vcf.tbi. The VCF file must be tabixed\n" unless ( -s "$vcf.tbi" );
+
+#die "ERROR in installing R packages\n" if ( ! &installPackages() );
+
+my ($rVcfIds,$rhPhes,$rhCovs,$rPnames) = &readPedVcfMulti($epactsdir,$ped,$vcf,$missing,\@phenos,\@covs,\@condsnps);
+my @vcfIds = @{$rVcfIds};
+my %hPhes = %{$rhPhes};
+my %hCovs = %{$rhCovs};
+
+open(IND,">$out.ind") || die "Cannot open IND file $out.ind for writing\n";
+open(PHE,">$out.phe") || die "Cannot open PHE file $out.phe for writing\n";
+if ( ( $#covs >= 0 ) || ( $#condsnps >= 0 ) ) { open(COV,">$out.cov") || die "Cannot open file\n"; }
+
+print PHE "#IND_ID\t".join("\t",@{$rPnames})."\n";
+my $nInds = 0;
+for(my $i=0; $i < @vcfIds; ++$i) {
+    my $id = $vcfIds[$i];
+    if ( defined($hPhes{$id}) ) {
+	print IND "$id\t".($i+1)."\n";
+	print PHE "$id\t".join("\t",@{$hPhes{$id}})."\n";
+	print COV "$id\t".join("\t",@{$hCovs{$id}})."\n" if ( ( $#covs >= 0) || ( $#condsnps >= 0 ) );
+	++$nInds;
+    }
+}
+close IND;
+close PHE;
+close COV;
+
+print STDERR "Successfully written ".($#{$rPnames}+1)." phenotypes and ".($#covs+1)." covariates across $nInds individuals\n";
+
+if ( $invNorm ) {
+    print STDERR "Performing inverse normal transformation of phenotypes\n";
+    open(R,">$out.invNorm.R") || die "Cannot open file $out.invNorm.R for writing\n";
+    print R "t5 <- read.table('$out.phe',nrows=2)\n";
+    print R "classes <- sapply(t5,class)\n";
+    print R "T <- read.table('$out.phe',colClasses=classes)\n";
+    print R "n <- as.matrix(T[,1])\n";
+    print R "Y <- as.matrix(T[,-1])\n";
+    if ( $#covs >= 0 ) {
+	print R "c <- as.matrix(read.table('$out.cov')[,-1])\n";
+	print R "R <- apply(Y,2,function(x) { lm(x~c)\$residual })\n";
+    }
+    else {
+	print R "R <- Y\n";
+    }
+    print R "Rn <- cbind(n, apply(R,2,function(x) { qnorm((rank(x)-0.5)/length(x)); }))\n";
+    print R "colnames(Rn) <- scan('$out.phe',what=character(),nlines=1)\n";
+    print R "write.table(Rn,'$out.phe',row.names=FALSE,col.names=TRUE,quote=FALSE,sep=\"\t\")\n";
+    close R;
+    my $cmd = "$binRscript $out.invNorm.R --vanilla";
+    #if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+    &forkExecWait($cmd);
+    unlink("$out.invNorm.R");
+    @covs = (); ## don't regress out covariates any more
+}
+
+###########################################################################################
+# PART II : Write out the Makefile
+###########################################################################################
+my $pheno = "$out.phe";
+my $cov = ( ( $#covs >= 0 ) || ( $#condsnps >= 0 ) ) ? "$out.cov" : "NULL";
+my $ind = "$out.ind";
+
+if ( ( ! $sepchr ) && ( $vcf =~ /chr/ ) && ( ! $chr ) ) {
+    print STDERR "*************************************************************************************\n";
+    print STDERR "******* IMPORTANT WARNING ***********************************************************\n";
+    print STDERR "******* If your VCF is separated by chromosome, you must put set --sepchr option ****\n";
+    print STDERR "******* Otherwise, you may end up having only single chromosome's result ************\n";
+    print STDERR "*************************************************************************************\n";
+}
+
+open(MAK,">$out.Makefile") || die "Cannot open file $out.Makefile for writing\n";
+print MAK ".DELETE_ON_ERROR:\n\n";
+if ( $test eq "q.emmax" ) {  ## Need to generate kinship matrix and REML first
+    my @kins = ();
+    my @kcmds = ();
+    my @tgts = ();
+    my @cmds = ();
+
+    for(my $i=0; $i < @chrs; ++$i) {
+	if ( ( $chr eq "" ) || ( $chrs[$i] eq $chr ) ) {
+	    my $szchr = $szchrs[$i];
+	    print STDERR "Kinship : Processing chromosome $chrs[$i]...\n";
+	    my $cvcf = $vcf;
+	    if ( $sepchr ) {
+		die "ERROR: with --sepchr option, $vcf must contain chr1" unless ( $vcf =~ /chr1/ );
+		$cvcf =~ s/chr1/chr$chrs[$i]/g;
+		unless ( -s $cvcf ) {
+		    print STDERR "WARNING: $cvcf does not exist. Skipping..\n";
+		    next;
+		}
+	    }
+
+	    for(my $j=1; $j < $szchr; $j += $unit) {
+		my ($start,$end) = ($j,$j+$unit-1);
+		$end = $szchr if ( $end > $szchr );
+		
+		if ( $bprange ) {
+		    ($start,$end) = split(/-/,$bprange);
+		}
+		
+		my $op = "$out.$chrs[$i].$start.$end";
+		my $region = "$chrs[$i]:$start-$end";
+		
+		my $tgt = "$op.epacts.gz";
+		my $cmd = "$epactsdir/bin/pEmmax multi-assoc --vcf $cvcf --region $region --field $field --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC --maxP $maxP --tryf $tryf".($compact ? " --compact" : "");
+		if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+		$cmd = "\t$cmd\n";
+		if ( $anno ) {
+		    $cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts.gz --ref $ref\n";
+		}
+		$cmd .= "\t$epactsdir/bin/tabix -f -pbed $tgt\n";
+		push(@tgts,$tgt);
+		push(@cmds,$cmd);
+		
+		last if ( $bprange );
+	    }
+	}
+    }
+
+    print MAK "all: $out.epacts.OK".($remlFlag ? " $out.reml" : "")."\n\n";
+    print MAK "$out.epacts.OK: ".join(".tbi ",@tgts).".tbi".($remlFlag ? " $out.reml" : "")."\n";
+    print MAK "\t$epactsdir/bin/epacts-cat @tgts | $epactsdir/bin/bgzip -c > $out.epacts.gz\n";
+    print MAK "\t$epactsdir/bin/tabix -f -pbed $out.epacts.gz\n";
+    print MAK "\t$binrm -f @tgts @kins\n";
+    print MAK "\ttouch $out.epacts.OK\n";
+    print MAK "\n";
+    for(my $i=0; $i < @tgts; ++$i) {
+	print MAK "$tgts[$i].tbi: $vcf $ped $out.reml\n";
+	print MAK "\tsleep ".sprintf("%.3lfs",rand(10))."\n";
+	print MAK "$cmds[$i]\n";
+    }
+    
+    if ( $remlFlag ) {
+	print MAK "$out.reml: $vcf $ped\n";
+	my $cmd = "$epactsdir/bin/pEmmax multi-reml --phenof $pheno ".(($cov ne "NULL") ? "--covf $cov" : " ")." --kinf $kinf --indf $ind --out-eigf $out.eigR --out-remlf $out.reml --out-tryf $out.tryf --vcf $vcf";
+	#if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+	print MAK "\t$cmd\n";
+	print MAK "\n";
+    }
+    close MAK;
+
+}
+else {
+    if ( !( $invNorm ) && ( $#covs >= 0 ) ) {
+	print STDERR "Performing inverse normal transformation of phenotypes\n";
+	open(R,">$out.regress.R") || die "Cannot open file $out.regress.R for writing\n";
+	print R "t5 <- read.table('$out.phe',nrows=2)\n";
+	print R "classes <- sapply(t5,class)\n";
+	print R "T <- read.table('$out.phe',colClasses=classes)\n";
+	print R "n <- as.matrix(T[,1])\n";
+	print R "Y <- as.matrix(T[,-1])\n";
+	print R "c <- as.matrix(read.table('$out.cov')[,-1])\n";
+	print R "R <- cbind(n, apply(Y,2,function(x) { lm(x~c)\$residual }))\n";
+	print R "colnames(R) <- scan('$out.phe',what=character(),nlines=1)\n";
+	print R "write.table(R,'$out.phe',row.names=FALSE,col.names=TRUE,quote=FALSE,sep=\"\t\")\n";
+	close R;
+	my $cmd = "$binRscript $out.regress.R --vanilla";
+	if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+	&forkExecWait($cmd);
+	@covs = (); ## don't regress out covariates any more
+	unlink("$out.regress.R");
+    }
+    
+    my @tgts = ();
+    my @cmds = ();
+    for(my $i=0; $i < @chrs; ++$i) {
+	if ( ( $chr eq "" ) || ( $chrs[$i] eq $chr ) ) {
+	    my $szchr = $szchrs[$i];
+	    print STDERR "Processing chromosome $chrs[$i]...\n";
+	    my $cvcf = $vcf;
+	    if ( $sepchr ) {
+		die "ERROR: with --sepchr option, $vcf must contain chr1" unless ( $vcf =~ /chr1/ );
+		$cvcf =~ s/chr1/chr$chrs[$i]/g;
+		unless ( -s $cvcf ) {
+		    print STDERR "WARNING: $cvcf does not exist. Skipping..\n";
+		    next;
+		}
+	    }
+	    
+	    for(my $j=1; $j < $szchr; $j += $unit) {
+		my ($start,$end) = ($j,$j+$unit-1);
+		$end = $szchr if ( $end > $szchr );
+
+		if ( $bprange ) {
+		    ($start,$end) = split(/-/,$bprange);
+		}
+
+		my $op = "$out.$chrs[$i].$start.$end";
+		my $region = "$chrs[$i]:$start-$end";
+		
+		my $tgt = "$op.epacts.gz";
+		my $cmd = "$epactsdir/bin/pEmmax multi-assoc-plain --vcf $cvcf --region $region --field $field --indf $ind --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC --maxP $maxP --pheno $out.phe".($compact ? " --compact" : "");
+		
+		#die "ERROR: Cannot find $datadir/multi.$test.R\n" unless ( -s "$datadir/multi.$test.R" );
+
+		#$cmd = "$binRscript $datadir/epactsMulti.R --vanilla $epactsdir $pheno $cov $ind $cvcf $region $op.epacts $field $minMAF $maxMAF $minMAC $maxMAC $minCallRate $minRSQ ".(($pass) ? "TRUE" : "FALSE")." multi.$test; gzip $op.epacts";
+		if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+		$cmd = "\t$cmd\n";
+
+		if ( $anno ) {
+		    if ( $mosixNodes ) { 
+			$cmd .= "\t".&getMosixCmd("$epactsdir/bin/epacts-anno --ref $ref --in $op.epacts.gz",$mosixNodes)."\n";
+		    }
+		    else {
+			$cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts.gz --ref $ref\n";
+		    }
+		}
+		$cmd .= "\t$epactsdir/bin/tabix -f -pbed $tgt\n";
+		push(@tgts,$tgt);
+		push(@cmds,$cmd);
+
+		last if ( $bprange );
+	    }
+	}
+    }
+
+    print MAK "all: $out.epacts.OK\n\n";
+    print MAK "$out.epacts.OK: ".join(".tbi ",@tgts).".tbi\n";
+    print MAK "\t$epactsdir/bin/epacts-cat @tgts | $epactsdir/bin/bgzip -c > $out.epacts.gz\n";
+    print MAK "\t$epactsdir/bin/tabix -f -pbed $out.epacts.gz\n";
+    print MAK "\t$binrm -f @tgts ".join(".tbi ",@tgts).".tbi\n";
+    print MAK "\ttouch $out.epacts.OK\n";
+    print MAK "\n";
+    for(my $i=0; $i < @tgts; ++$i) {
+	print MAK "$tgts[$i].tbi: $vcf $ped\n";
+	print MAK "\tsleep ".sprintf("%.3lfs",rand(10))."\n";
+	print MAK "$cmds[$i]\n";
+    }
+    close MAK;
+}
+
+print "Finished generating EPACTS Makefile\n";
+if ( $run < 0 ) {
+    print "EPACTS will run the with the following commond:\n";
+    print "\tmake -f $out.Makefile -j [# of parallel jobs]\n";
+    print "Or perform sanity checking using the following command:\n";
+    print "\tmake -f $out.Makefile -n\n";
+}
+elsif ( $run == 0 ) {
+    print "Running maximum parallel jobs of EPACTS\n";
+    my $cmd = "$binmake -f $out.Makefile -j ".(($restart) ? " -B" : "");
+    print "$cmd\n";
+    print `$cmd`;
+    die "FATAL ERROR: Error occured during single variant test" if ( $? == -1 ); 
+}
+else {
+    print "Running $run parallel jobs of EPACTS\n";
+    my $cmd = "$binmake -f $out.Makefile -j $run".(($restart) ? " -B" : "");
+    print "$cmd\n";
+    print `$cmd`;
+    die "FATAL ERROR: Error occured during single variant test" if ( $? == -1 ); 
+}

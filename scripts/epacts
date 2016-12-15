@@ -1,0 +1,133 @@
+#!/usr/bin/perl -w
+
+#################################################################
+## TODO
+## During --invNorm determine which one to regress out 
+#################################################################
+
+##################################################################
+## epacts.pl : VCF association test interface for single variants
+##################################################################
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+use Cwd;
+use FindBin;
+use lib "$FindBin::Bin";
+use epacts qw(@chrs @szchrs);
+my $dir = $FindBin::Bin;
+my $bindir = $dir;
+
+if ( $#ARGV < 0 ) {
+    print STDERR "ERROR: Missing command. Please see the usage below.\n";
+    pod2usage(1);
+}
+elsif ( $ARGV[0] =~ /^([\-])*man$/ ) {
+    pod2usage(-verbose => 2);
+}
+elsif ( $ARGV[0] =~ /^([\-])*help$/ ) {
+    pod2usage(1);
+}
+elsif ( $ARGV[0] eq "single") {
+    shift(@ARGV);
+    exec("$bindir/epacts-single",@ARGV);
+}
+elsif ( $ARGV[0] eq "group") {
+    shift(@ARGV);
+    exec("$bindir/epacts-group",@ARGV);
+}
+elsif ( $ARGV[0] eq "plot") {
+    shift(@ARGV);
+    exec("$bindir/epacts-plot",@ARGV);
+}
+elsif ( $ARGV[0] eq "anno") {
+    shift(@ARGV);
+    exec("$bindir/epacts-anno",@ARGV);
+}
+elsif ( $ARGV[0] eq "zoom") {
+    shift(@ARGV);
+    exec("$bindir/epacts-zoom",@ARGV);
+}
+elsif ( $ARGV[0] eq "make-group") {
+    shift(@ARGV);
+    exec("$bindir/epacts-make-group",@ARGV);
+}
+elsif ( $ARGV[0] eq "make-kin") {
+    shift(@ARGV);
+    exec("$bindir/epacts-make-kin",@ARGV);
+}
+elsif ( $ARGV[0] eq "download") {
+    shift(@ARGV);
+    exec("$bindir/epacts-download",@ARGV);
+}
+else {
+    print STDERR "ERROR: Unknown command $ARGV[0]. Please see the usage below.\n";
+    pod2usage(1);
+}
+
+__END__
+
+=head1 NAME
+
+epacts - Efficient and Parallelizable Association Container ToolBox
+
+=head1 SYNOPSIS
+
+epacts [command] [options] 
+
+ Command:
+   help            Print out brief help message
+   man             Print the full documentation in man page style
+   single          Perform single variant association
+   group           Perform groupwise (burden-style) association test
+   anno            Annotate a VCF file
+   zoom            Create a locus zoom plot from epacts results
+   meta            Perform meta-analysis across multiple epacts results
+   make-group      Create the group information for gene-based testing
+   make-kin        Create a kinship matrix
+
+ Visit http://genome.sph.umich.edu/wiki/EPACTS for more detailed documentation
+
+=head1 COMMANDS
+
+=over 8
+
+=item B<help>
+
+Print a brief help message and exits.
+
+=item B<man>
+
+Prints the manual page and exits.
+
+=item B<single>
+
+Perform single variant association test. Type 'epacts single -help' for more detailed information.
+
+=item B<group>
+
+Perform burden-style groupwise association test. Type 'epacts gene -help' for more detailed information
+
+=item B<anno>
+
+Annotate VCF or epacts results. Type 'epacts anno -help' for more detailed information.
+
+=item B<zoom>
+
+Create a locus zoom plot from epacts results. Type 'epacts zoom -help' for more detailed information
+
+=item B<meta>
+
+Perform meta-analysis across multiple epacts results. Type 'epacts meta -help' for more detailed information
+
+=back
+
+=head1 DESCRIPTION
+
+B<epacts> is an efficient and flexible software pipelien for sequence-based
+genetic analysis. It takes VCF-formatted file as input and performs a wide
+variety of single variant and buden test. 
+
+Visit http://genome.sph.umich.edu/wiki/EPACTS for more detailed documentation
+
+=cut

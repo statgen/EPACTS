@@ -1,0 +1,344 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Cwd;
+use FindBin;
+use File::Basename;
+use lib "$FindBin::Bin";
+use wGetOptions qw(wGetOptions wpod2usage);
+use epacts qw(@chrs @szchrs @cumszchrsMb parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrs readPedVcf $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binpfbtops $bingnuplot $binepstopdf $binsort $binawk $defaultfasta);
+
+my $in = "";
+my $thinUnit = 0.01;
+my $outf = "";
+my $ymax = 0;
+my $xmax = 0;
+my $title = "";
+my $thinBinMb = 1;
+my $sigThres = 5e-8;
+my $region = "";
+my $groupFlag = "";
+my $ignoreMAF = "";
+my $labelf = "";
+my %nchrs = ();
+
+wGetOptions(
+    "-Generate Mahanttan, QQ plot, and top signals from EPACTS results",
+    "--Required Options",
+    "in=s", [\$in,
+	     "Input prefix (EPACTS output prefix)",
+	     "Input file, which is the prefix of EPACTS output file to be used as input for QQ and Manhattan plot",
+	     ],
+    "--Key Options",
+    "out=s",[\$outf,
+	     "Output prefix",
+	     "Prefix of output files. If omitted --in argument will be used",
+	     ],
+    "title=s",[\$title,
+	       "Title of the plots",
+	       "Main title of the QQ and Manhattan plot.",
+	       ],
+    "group",[\$groupFlag,
+	     "Indicator for groupwise association",
+	     ],
+
+    "--Other Options",
+    "sig-thres=f",[\$sigThres,
+		   "Significance threshold of p-value to draw",
+		   "Significnce threshold of p-value. Default is 5e-8 if -group is OFF and 2.5e-6 if -group is ON",
+		   ],
+    "thin-unit=f",[\$thinUnit,
+		   "Thinning unit of points in log10 scale",
+		   "Thinning unit for log10 p-values to reduce redundancy (and size) of graph. Default value is .01",
+		   ],
+    "ymax=f",[\$ymax,
+	      "Maximum -log10(p-value) to plot",
+	      ],
+    "xmax=f",[\$xmax,
+	      "Maximum megabases to plot",
+	      ],
+    "region=s",[\$region,
+		"Subset of genomic regions to plot",
+		"[chr]:[beg]-[end] format string to indicate a subset of regions to plot",
+		],
+    "labelf=s",[\$labelf,
+		"File containing [MAKER_ID] [LABEL]",
+		"File containing [MAKER_ID] [LABEL]"
+		],
+    "ignore-maf",[\$ignoreMAF,
+		  "Ignore MAF in QQ plot",
+		  "Ignore MAF in QQ plot and do not group variants based on MAF",
+		  ],
+    ) || wpod2usage(2);
+
+unless ( $in ) {
+    print STDERR "ERROR: Missing required option\n";
+    wpod2usage(2);
+}
+
+my $epactsdir = dirname($FindBin::Bin);
+my $datadir = "$epactsdir/share/EPACTS";
+
+$outf = $in unless ($outf);
+my ($chrom) = ($region) ? split(/:/,$region) : ("");
+
+if ( $in =~ /.gz$/ ) {
+    $outf =~ s/.gz$//;
+    if ( $region ) { 
+	die "$in is not tabixed\n" unless ( -s "$in.tbi" );
+	open(IN,"$epactsdir/bin/tabix -h $in $region |"); 
+    }
+    else { open(IN,"$binzcat $in |") || die "Cannot open file $in\n"; }
+}
+else {
+    open(IN,$in) || die "Cannot open file $in\n";
+}
+
+my %hLabelBin = ();
+my %hLabelCnts = ();
+my $logten = log(10);
+my $maxBin = 0;
+my @labels = ("MAF [.05,.5]","MAF [.01,.05)","MAF [.005,.01)","MAF [.001,.005)");
+my ($imaf,$ipval);
+my %hmbin = ();
+my $mcnt = 0;
+my %hLabelf = ();
+
+if ( $labelf ) {
+    my %hls = ();
+    @labels = ();
+    open(LBL,$labelf) || die "Cannot open $labelf\n";
+    while(<LBL>) {
+	my ($id,$label) = split;
+	unless ( defined($hls{$label}) ) {
+	    push(@labels,$label);
+	    $hls{$label} = $#labels;
+	}
+	$hLabelf{$id} = $hls{$label};
+    }
+    close LBL;
+    push(@labels,"OTHERS");
+}
+
+my @xs = ();
+my @ys = ();
+my @cs = ();
+my %hbin = ();
+my @colors = ("167D19","F71A1B","0000FF","666666","4533E5","C119BA","BCBE2C","000000");
+my @pts = (6,9,4,7);
+my @mcolors = ("000044","7777BB");
+my $maxlogp = $ymax;
+
+while(<IN>) {
+    print STDERR "epacts-plot: Processing $. lines..\n" if ( $. % 100000 == 0 );
+    if ( /^#/ ) { ## Parse header
+	my @F = split;
+	for(my $i=0; $i < @F; ++$i) {
+	    $imaf = $i if ( ( $F[$i] eq "MAF" ) || ( $F[$i] eq "FRAC_WITH_RARE" ) );
+	    if ( $F[$i] eq "FRAC_WITH_RARE" ) {
+		$groupFlag = 1;
+		$sigThres = 2.5e-6 if ( $sigThres == 5e-8 );
+		@labels = ("WITH-RARE [.05,1]","WITH-RARE [.01,.05)","WITH-RARE [.005,.01)","WITH-RARE [.001,.005)");
+	    }
+	    $ipval = $i if ( $F[$i] eq "PVALUE" );
+	}
+	if ( ( $ignoreMAF ) || ( !defined($imaf) ) ) {
+	    #@labels = ("ALL MAF");
+	    @labels = ("ALL");
+	    undef($imaf);
+	    print STDERR "Cannot find MAF or FRAC_BURDEN column in header $_\n" unless ( $ignoreMAF );
+	}
+	die "Cannot find PVALUE column in header $_\n" unless ( defined($ipval) );
+	next;
+    }
+
+    my @F = split;
+    my $maf = defined($imaf) ? $F[$imaf] : 0.5;
+    my $pval = $F[$ipval];
+
+    next if ( ( $pval eq "NA" ) || ( $pval eq "nan" ) );
+    next if ( ( $maf eq "NA" ) || ( $maf < 1e-6 ) );
+
+    my ($chr,$beg,$end) = @F[0..2];
+    my $pos = sprintf("%d",($beg+$end)/2); 
+
+    $nchrs{$chr} = 0 unless defined($chr);
+    ++$nchrs{$chr};
+    my $label = ($labelf) ? 
+	(defined($hLabelf{$F[3]}) ? $labels[$hLabelf{$F[3]}] : $labels[$#labels]) :
+	(($maf > .05) ? $labels[0] : (($maf > .01) ? $labels[1] : (($maf > .005) ? $labels[2] : $labels[3])));
+
+    my $logp = 0-log($pval+1e-30)/$logten;
+    $maxlogp = $logp if ( $maxlogp < $logp );
+    my $nchr = &schr2nchr($chr);
+
+    #die "@cumszchrsMb\n";
+
+    my $xbin = ($chrom) ? sprintf("%.1lf",$cumszchrsMb[$nchr-1]+$pos/1e6) : (sprintf("%d",($cumszchrsMb[$nchr-1]+$pos/1e6)/3)*3);
+    my $ybin = sprintf("%.1lf",$logp);
+
+    unless ( defined($hbin{$xbin}{$ybin}) ) {
+	push(@xs,$xbin);
+	push(@ys,$ybin);
+	push(@cs,$mcolors[$nchr % ($#mcolors+1)]);
+	$hbin{$xbin}{$ybin} = 1;
+	++$mcnt;
+    }
+
+    my $bin = sprintf("%d",$logp/$thinUnit);
+    $maxBin = $bin if ( $maxBin < $bin );
+    $hLabelBin{$label}{$bin} = 0 unless defined($hLabelBin{$label}{$bin});
+    $hLabelCnts{$label} = 0 unless defined($hLabelCnts{$label});
+
+    ++($hLabelBin{$label}{$bin});
+    ++$hLabelCnts{$label};
+}
+
+my $nsnps = 0;
+my $minnsnps = 1e9;
+foreach my $label (sort keys %hLabelCnts) {
+    $nsnps += $hLabelCnts{$label};
+    $minnsnps = $hLabelCnts{$label} if ( $minnsnps > $hLabelCnts{$label} );
+}
+print STDERR "nsnps = $nsnps\n";
+
+for(my $i=0; $i < @labels; ++$i) {
+    my $label = $labels[$i];
+    open(OUT,">$outf.$i.dat") || die "Cannot open file\n";
+    my $cumCnts = 0;
+    for(my $j=$maxBin; $j >= 0; --$j) {
+	if ( defined($hLabelBin{$label}{$j}) ) {
+	    my $cnt = $hLabelBin{$label}{$j};
+	    my $y = $j*$thinUnit;
+	    $y = $ymax if ( ( $ymax > 0 ) && ( $y > $ymax ) );
+	    my $xr = sprintf("%d",0-log(($cumCnts+$cnt)/$hLabelCnts{$label})/$logten/$thinUnit);
+	    my $xl = sprintf("%d",0-log(($cumCnts+1.)/$hLabelCnts{$label})/$logten/$thinUnit);
+	    for(my $k=$xr; $k <= $xl; ++$k) {
+		printf OUT ("%.4lf\t%.4lf\n",$k*$thinUnit,$y);
+	    }
+	    $cumCnts += $cnt;
+	}
+    }
+    close OUT;
+}
+
+open(R,">$outf.R") || die "Cannot open $outf.R";
+print R "N <- $minnsnps\n";
+print R "sz.conf <- .95\n";
+print R "xs <- floor(10^((0:1000)/100))\n";
+print R "xs <- c(xs[xs < N],N)\n";
+print R "lmean <- xs/(N+1)\n";
+print R "M <- length(xs)\n";
+print R "lmin<-qbeta(rep((1-sz.conf)/2,M),xs,N+1-xs)\n";
+print R "lmax<-qbeta(rep((1+sz.conf)/2,M),xs,N+1-xs)\n";
+print R "write.table(0-log10(cbind(lmean,lmin,lmax)),'$outf.conf',row.names=F,col.names=F)\n";
+close R;
+my $cmd = "$binRscript $outf.R --vanilla\n";
+print "$cmd\n"; print `$cmd`; #die;
+die "FATAL ERROR - epacts-plot: Error occured while running R script" if ( $? == -1 ); 
+
+open(CMD, ">$outf.cmd") || die "Cannot open file\n";
+print CMD "set terminal postscript eps color enhanced dashed dashlength 3.0 linewidth 1.0 size 3,3.5 font 'Calibri,16' fontfile 'calibri.pfb' fontfile 'GillSansMT.pfb' fontfile 'GillSansItalic.pfb'\n";
+print CMD "set out '$outf.qq.eps'\n";
+print CMD "set key below box\n";
+print CMD "set xrange [0:$xmax]\n" if ( ( $xmax ) && ( $xmax > 0 ) );
+print CMD "set yrange [0:$ymax]\n" if ( ( $ymax ) && ( $ymax > 0 ) );
+print CMD "set xtics out nomirror\n";
+print CMD "set ytics out nomirror\n";
+print CMD "set xlabel 'Expected ordered -log_{10}(pvalue)'\n";
+print CMD "set ylabel 'Observed ordered -log_{10}(pvalue)'\n";
+print CMD "set title '$title' font 'GillSansMT,20'\n" if ($title);
+print CMD "set grid x y\n";
+#print CMD "plot x with lines lt 1 lc rgbcolor 'black' notitle";
+print CMD "plot '$outf.conf' u 1:3:2 with filledcurve notitle fs solid 1.0 lc rgb '#BBBBBB', '$outf.conf' u 1:1 with lines lt 1 lc rgbcolor 'black' notitle";
+for(my $i=0; $i < @labels; ++$i) {
+    #print CMD ", '$outf.$labels[$i].dat' u 1:2 with points ps 1 pt 6 lc rgbcolor '$colors[$i]' title '$labels[$i] (".($hLabelCnts{$labels[$i]}).")'";
+    if ( defined($hLabelCnts{$labels[$i]}) ) {
+	print CMD ", '$outf.$i.dat' u 1:2 with points ps 0.7 pt $pts[$i] lc rgbcolor '#$colors[$i]' title '$labels[$i] (".($hLabelCnts{$labels[$i]}).")'";
+    }
+}
+print CMD "\n";
+close CMD;
+
+my $setenv = "export GDFONTPATH=$datadir; export GNUPLOT_FONTPATH=$datadir; export GNUPLOT_PS_DIR=$datadir; export PATH=\$PATH:$epactsdir/bin/; export GNUPLOT_PFBTOPFA=\"$binpfbtops %s\"";
+
+$cmd = "$setenv; $bingnuplot $outf.cmd";
+print "$cmd\n";
+print `$cmd`;
+die "FATAL ERROR - epacts-plot: Error occured while running gnuplot" if ( $? == -1 ); 
+
+$cmd = "$setenv; $binepstopdf $outf.qq.eps";
+print "$cmd\n";
+print `$cmd`;
+die "FATAL ERROR - epacts-plot: Error occured while running epstopdf" if ( $? == -1 ); 
+
+open(CMD,">$outf.cmd") || die "Cannot open file\n";
+print CMD "set terminal postscript eps color enhanced dashed dashlength 3.0 linewidth 1.0 size 8,3 font 'Calibri,18' fontfile 'calibri.pfb' fontfile 'GillSansMT.pfb' fontfile 'GillSansItalic.pfb'\n";
+print CMD "set out '$outf.mh.eps'\n";
+print CMD "set tmargin 1\n";
+print CMD "set lmargin 8\n";
+print CMD "set rmargin 1\n";
+print CMD "set bmargin 4\n";
+print CMD "unset key\n"; # top left box font 'GillSansMT,16'\n";
+my $ymax2 = $ymax;
+my $logpthres = 0-log($sigThres)/$logten;
+$ymax2 = $logpthres + 3 if ( $ymax < $logpthres + 3 );
+print CMD "set yrange [0:$ymax2]\n" if ( $ymax > 0 );
+print CMD "set ylabel '-log_{10}(p)' font 'GillSansMT,24' offset 1\n";
+print CMD "set ytics 0,1 nomirror out font 'GillSansMT,18'\n";
+print CMD "set grid mx y\n";
+
+if ( $chrom ) {
+    print CMD "set xtics nomirror out font 'GillSansMT,18'\n";
+    print CMD "set xlabel 'Base Position in Chromosome $chrom (Mb)' font 'GillSansMT,24'\n";
+    print CMD "set xrange [0:".($szchrs[$ichrs{$chrom}]/1e6)."]\n";
+}
+else {
+    my @xtics = ();
+    for(my $j=0; $j < @chrs; ++$j) {
+	push(@xtics,"'$chrs[$j]' ".(($cumszchrsMb[$j]+$cumszchrsMb[$j+1])/2));
+	push(@xtics,"' ' ".($cumszchrsMb[$j]). " 1 ");
+    }
+    print CMD "set xtics (".join(",",@xtics).") nomirror out font 'GillSansMT,18'\n";
+    print CMD "set xlabel 'Chromosomal Coordinates' font 'GillSansMT,24'\n";
+    print CMD "set xrange [0:".($cumszchrsMb[23])."]\n";
+}
+print CMD "plot '-' using 1:2:3 with points lc rgbcolor variable pt 7 ps 0.7 notitle";
+print CMD ", $logpthres with lines lc rgbcolor 'red' lt 1 lw 3 notitle\n";
+if ( $chrom ) {
+    my $offset = $cumszchrsMb[$ichrs{$chrom}];
+    for(my $i=0; $i < @xs; ++$i) {
+	print CMD $xs[$i]-$offset;
+	print CMD "\t$ys[$i]\t0x$cs[$i]\n";
+    }
+}
+else {
+    for(my $i=0; $i < @xs; ++$i) {
+	print CMD "$xs[$i]\t$ys[$i]\t0x$cs[$i]\n";
+    }
+}
+print CMD "e\n";
+close CMD;
+
+$cmd = "$setenv; $bingnuplot $outf.cmd";
+print "$cmd\n";
+print `$cmd`;
+die "FATAL ERROR - epacts-plot: Error occured while running gnuplot" if ( $? == -1 ); 
+
+$cmd = "$setenv; $binepstopdf $outf.mh.eps";
+print "$cmd\n";
+print `$cmd`;
+die "FATAL ERROR - epacts-plot: Error occured while running epstopdf" if ( $? == -1 ); 
+
+my @F = split(/\//,$outf);
+my $outfn = $F[$#F];
+
+$cmd = "$binrm $outf.cmd $outf.qq.eps $outf.mh.eps $outf.*.dat";
+print "$cmd\n";
+print `$cmd`;
+die "FATAL ERROR - epacts-plot: Error occured while removing files" if ( $? == -1 ); 
+
+$cmd = (($in =~ /.gz$/) ? "$binzcat $in" : "$bincat $in")." | $binawk '\$".($ipval+1)." != \"NA\" { print \$0 }' | $binsort -g -k ".($ipval+1)." | $binhead -n 5000 > $outf.top5000";
+print "$cmd\n";
+print `$cmd`;
+die "FATAL ERROR - epacts-plot: Error occured while generating top associated list of loci" if ( $? == -1 ); 

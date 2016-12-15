@@ -1,0 +1,556 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Cwd;
+use FindBin;
+use File::Basename;
+use lib "$FindBin::Bin";
+use wGetOptions qw(wGetOptions wpod2usage);
+use epacts qw(@chrs @szchrs @cumszchrsMb parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrs readPedVcf $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binpfbtops $bingnuplot $binepstopdf $binsort);
+use POSIX qw(log10);
+
+my $epactsdir = dirname($FindBin::Bin);
+my $datadir = "$epactsdir/share/EPACTS";
+my $prefix = "";
+my $vcf = "";
+my $pos = "";
+my $top = 0;
+my $out = "";
+my $map = "$datadir/genetic_map_GRCh37_wgs.txt.gz";
+my $indf = "";
+my $region = "";
+my $minr2 = ".5";
+my $cmext = ".02";
+my $win = 300000;
+my $sepchr = "";
+my $genef = "$datadir/hg19_refFlat.txt.gz";
+my $cellType = "";
+my $pointsize = 1;
+my $title = "";
+my $shade = "";
+my $sigThres = 5e-8;
+my $snpid = "";
+my $rule = "";
+
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+wGetOptions(
+    "-Produce locus zoom plot for EPACTS association results",
+    "--Required Options",
+    "prefix=s",[\$prefix,
+		"Prefix of EPACTS output",
+		],
+    "vcf=s",[\$vcf,
+	     "VCF file to calculate MAF and LD",
+	     ],
+    "--Additional Options",
+    "pos=s",[\$pos,
+	     "Variant position in the format of [CHROM]:[POS]",
+	     ],
+    "snpid=s",[\$snpid,
+	       "SNP ID in the format of [CHROM]:[POS]",
+	       ],
+    "top=i",[\$top,
+	     "Number of top associated signals to plot",
+	     ],
+    "out=s",[\$out,
+	     "Prefix of output files",
+	     ],
+    "map=s",[\$map,
+	     "Genetic map file",
+	     ],
+    "indf=s",[\$indf,
+	      "File with a set of individual IDs to calculate LD",
+	      ],
+    "minr2=f",[\$minr2,
+	       "Minimum r2 threshold to determine boundary",
+	       ],
+    "cmext=f",[\$cmext,
+	       "Centimorgan to extend beyond the boundary",
+	       ],
+    "win=i",[\$win,
+	     "Base pair to extend beyond the focal SNP",
+	     ],
+    "region=s",[\$region,
+		"Subset of genomic region to plot",
+		"[chr]:[beg]-[end] formatted string to specify genomic region to plot",
+		],
+    "sepchr",[\$sepchr,
+	      "Indicator that VCF file is separated by chromosome",
+	      "Indicator that VCF file is separated by chromosome (names must include chr1, chr2, ...). If this option is used, VCF file must point to the chr1 file.",
+	      ],
+    "genef=s",[\$genef,
+	       "UCSC refFlat format gene prediction files to annotate genes",
+	       ],
+    "title=s",[\$title,
+	       "Title of the plot",
+	       ],
+    "shade",[\$shade,
+	     "Subset of genomic regions to shade in the plot",
+	     ],
+    "sigThres=f",[\$sigThres,
+		  "Significance threshold of p-value",
+		  ],
+    "rule=s",[\$rule,
+	      "Substring in the INFO field to be matched",
+	      "Option to select a subset of variants based on INFO field. This select only the variants with particular subseting included in the VCF",
+	      ],
+    "celltype=s",[\$cellType,
+		  "ENCODE cell type to draw",
+		  ],
+    ) || wpod2usage(2);
+
+unless ( ( $prefix ) && ( $vcf ) && ( ( $pos ) || ( $top > 0 ) ) ) {
+    print STDERR "Missing required option";
+    wpod2usage(2);
+}
+
+unless ( -s $vcf ) {
+    print STDERR "Cannot find VCF file\n";
+}
+
+
+if ( ( $pos ) && ( $top > 0 ) ) {
+    print STDERR "Only one of -pos or -top is needed";
+    wpod2usage(2);
+}
+
+if ( $out eq "" ) { $out = "$prefix.zoom"; }
+
+if ( $indf eq "" ) { $indf = "$prefix.ind"; }
+
+my $cellf = ($cellType =~ /.gz$/) ? $cellType : "$datadir/wgEncodeBroadHmm$cellType"."HMM.bed.gz";
+if ( $cellType ) {
+    die "Cannot open $cellf and $cellf.tbi\n" unless ( ( -s $cellf ) && ( -s "$cellf.tbi") );
+}
+
+my @apos= ();
+
+if ( $pos ) { push(@apos,$pos); }
+else {
+    die "Cannot use --snpid option with --top option\n" unless (defined($snpid));
+    open(IN,"$prefix.epacts.top5000") || die "Cannot open $prefix.epacts.top5000";
+    my $header = <IN>;
+    while(<IN>) {
+	my ($chrom,$bp) = split;
+	push(@apos,"$chrom:$bp");
+	last if ( $#apos + 1 == $top );
+    }
+}
+
+foreach my $bpos (@apos) {
+    print STDERR "SNP ID : $bpos\n";
+    print STDERR "Examining +-$win bp window\n";
+    my ($chr,$indexbp) = split(/:/,$bpos);
+    die "Cannot parse --pos $bpos\n" unless ( defined($indexbp) );
+
+    $snpid = $bpos unless ( defined($snpid) );
+
+    my $cvcf = $vcf;
+    $cvcf =~ s/chr1\./chr$chr\./ if ( $sepchr );
+
+## Retrieve genetic map information
+    my ($start,$end);
+    if ( ( $top == 0 ) && ( $region ) ) {
+	(my $chr2,$start,$end) = split(/:/,$region);
+    }
+    else {
+	$start = ($indexbp > $win) ? ($indexbp-$win) : 0;
+	$end = $indexbp+$win;
+	$region = "$chr:$start-$end";
+    }
+
+    print STDERR "Examining genomic region $region\n";
+
+    my @mapPos = ();
+    my @mapCMs = ();
+    open(IN,"$epactsdir/bin/tabix $map $region|") || die "Cannot open $map file\n";
+    while(<IN>) {
+	my ($chrom,$bp,$rate,$cM) = split;
+	push(@mapPos,$bp);
+	push(@mapCMs,$cM);
+    }
+    close IN;
+
+    my $indexcm;
+    for(my $i=0; $i < @mapPos; ++$i) {
+	if ( $mapPos[$i] eq $indexbp ) {
+	    $indexcm = $mapCMs[$i]
+	}
+	elsif ( $mapPos[$i] < $indexbp ) {
+	    $indexcm = $mapCMs[$i];
+	}
+	elsif ( $mapPos[$i] > $indexbp ) {
+	    if ( $mapPos[$i-1] < $indexbp ) {
+		$indexcm += ($indexbp-$mapPos[$i-1])/($mapPos[$i]-$mapPos[$i-1])*($mapCMs[$i]-$mapCMs[$i-1]);
+	    }
+	}
+    }
+
+    my $outf = "$out.$chr.$indexbp";
+    print STDERR "Index SNP's cM position is $indexcm\n";
+
+    open(RS,"$epactsdir/bin/vcfast index-LD --vcf $cvcf --region $region --indf $indf ".($sepchr ? "--sepchr" : "")." --index $chr:$indexbp ".($rule ? " --rule \"$rule\"" : "")." --out - 2> /dev/null |") || die "Cannot open file\n";
+    open(PS,"$epactsdir/bin/tabix -h $prefix.epacts.gz $region |") || die "Cannot open $prefix.epacts.gz file\n";
+    my @r2s = ();
+    my @bps = ();
+    my @mafs = ();
+    my @pvals = ();
+    my $minPos = $indexbp+$win;
+    my $maxPos = $indexbp-$win;
+    my $ipval = 0;
+    my $indexp = 1;
+    my @F = split(/[\t\r\n]/,<PS>);
+    for(my $i=0; $i < @F; ++$i) { $ipval = $i if ( $F[$i] eq "PVALUE" ); }
+    my ($pschr,$pspos,$pspval) = (0,0,1);
+
+    for(my $i=0; <RS>; ++$i) {
+	next if ( /^#/ );
+	print STDERR "Reading $i SNPs..\n" if ( $i % 1000 == 0 );
+	my ($chr,$pos,$id,$ref,$alt,$af,$r2) = split(/[\t\r\n]+/);
+	if ($r2 > $minr2 ) {
+	    $minPos = $pos if ( $minPos > $pos );
+	    $maxPos = $pos if ( $maxPos < $pos );
+	}
+	my $maf = ($af > 0.5) ? (1-$af) : $af;
+	push(@r2s,$r2);
+	push(@bps,$pos);
+	push(@mafs,$maf);
+	while( (defined($pschr)) && ($pschr ne "NA" ) && ( ( $pschr ne $chr ) || ( ( $pschr eq $chr ) && ( $pspos < $pos ) ) ) ) {
+	    my $line = <PS>;
+	    if ( defined($line) ) {
+		@F = split(/[\t\r\n]/,$line);
+		($pschr,$pspos) = ($F[0],$F[1]);
+		next unless ( defined($pspos) );
+		$pspval = $F[$ipval];
+		#$indexp = $pspval if ( $pspos == $indexbp );
+	    }
+	    else {
+		$pschr = "NA";
+		$pspos = 0;
+		$pspval = "NA";
+	    }
+	}
+	if ( defined($pschr) && ( $pschr eq $chr ) && ( $pspos == $pos ) ) {
+	    $indexp = $pspval if ( $pspos == $indexbp );
+	    push(@pvals,$pspval);
+	}
+	else {
+	    push(@pvals,"NA");
+	}
+    }
+    close RS;
+    close PS;
+
+    die "Cannot find index SNP. $maxPos < $minPos\n" if ( $maxPos < $minPos );
+
+    print STDERR "Unextended interval is $chr:$minPos-$maxPos (".($maxPos-$minPos)." bps)\n";
+    print STDERR "Extending the intervals by $cmext cM\n";
+
+    my ($mincm,$maxcm) = (0,0);
+    for(my $i=0; $i < @mapPos; ++$i) {
+	if ( $mapPos[$i] eq $minPos ) {
+	    $mincm = $mapCMs[$i];
+	}
+	elsif ( $mapPos[$i] < $minPos ) {
+	    $mincm = $mapCMs[$i];
+	}
+	elsif ( $mapPos[$i] > $minPos ) {
+	    if ( $mapPos[$i-1] < $minPos ) {
+		$mincm += ($minPos-$mapPos[$i-1])/($mapPos[$i]-$mapPos[$i-1])*($mapCMs[$i]-$mapCMs[$i-1]);
+	    }
+	}
+
+	if ( $mapPos[$i] eq $maxPos ) {
+	    $maxcm = $mapCMs[$i];
+	}
+	elsif ( $mapPos[$i] < $maxPos ) {
+	    $maxcm = $mapCMs[$i];
+	}
+	elsif ( $mapPos[$i] > $maxPos ) {
+	    if ( $mapPos[$i-1] < $maxPos ) {
+		$maxcm += ($maxPos-$mapPos[$i-1])/($mapPos[$i]-$mapPos[$i-1])*($mapCMs[$i]-$mapCMs[$i-1]);
+	    }
+	}
+    }
+    my ($minExPos,$maxExPos) = ($minPos,$maxPos);
+    for(my $i=0; $i < @mapPos; ++$i) {
+	if ( $mapCMs[$i] > $mincm - $cmext ) {
+	    $minExPos = $mapPos[$i] if ( $minExPos > $mapPos[$i] );
+	}
+	if ( $mapCMs[$i] < $maxcm + $cmext ) {
+	    $maxExPos = $mapPos[$i] if ( $maxExPos < $mapPos[$i] );
+	}
+    }
+
+    my ($norg,$next) = (0,0);
+    for(my $i=0; $i < @bps; ++$i) {
+	++$norg if ( ( $bps[$i] >= $minPos ) && ( $bps[$i] <= $maxPos ) );
+	++$next if ( ( $bps[$i] >= $minExPos ) && ( $bps[$i] <= $maxExPos ) );
+    }
+    my ($plotStart,$plotEnd) = ($start,$end);
+    if ( $region ) {
+	my ($c,$s,$e) = split(/[:\-]/,$region);
+	$plotStart = $s;
+	$plotEnd = $e;
+    }
+    my ($shadeStart,$shadeEnd) = ($minExPos,$maxExPos);
+
+    my $bufferedStartMb = $plotStart/1e6;
+    my $bufferedEndMb = $plotEnd/1e6;
+
+## Retrieve gene information within the region
+    open(IN,"$binzcat $genef |") || die "Cannot open $genef file\n";
+    my @genes = ();
+    my %hgenes = ();
+    my @annos = (3)x($#bps+1);
+
+    while(<IN>) {
+	my ($name1,$name2,$chr2,$strand,$txStart,$txEnd,$cdsStart,$cdsEnd,$exonCount,$exonStart,$exonEnd) = split;
+	$chr2 =~ s/^chr//;
+	if ( ( $chr eq $chr2 ) && ( $txEnd > $plotStart ) && ( $txStart < $plotEnd ) ) {
+	    $exonStart =~ s/,$//;
+	    $exonEnd =~ s/,$//;
+	    my @exonStarts = split(/,/,$exonStart);
+	    my @exonEnds = split(/,/,$exonEnd);
+	    push(@genes,[$name1,$txStart/1e6,$txEnd/1e6,\@exonStarts,\@exonEnds]) unless defined($hgenes{$name1});
+	    $hgenes{$name1} = 1;
+
+	    if ( $cellType ) {
+		my $iex = 0;
+		if ( $#exonStarts >= 0 ) {
+		    for(my $k=0; $k < @bps; ++$k) {
+			if ( $bps[$k] < $exonStarts[$iex] ) { next; }
+			elsif ( $bps[$k] <= $exonEnds[$iex] ) { $annos[$k] = 0; }
+			else {
+			    while ( ( $iex <= $#exonStarts ) 
+				    && ( $bps[$k] >= $exonEnds[$iex] ) )
+			    { ++$iex; }
+			}
+			last if ( $iex > $#exonStarts );
+		    }
+		}
+	    }
+	}
+    }
+    close IN;
+
+    @genes = sort {$a->[1] <=> $b->[1]} @genes;
+
+    ## if cellType was given, read the BED file and parse out all enhancers and promoters
+    if ( $cellType ) {
+	my @enhancers = ();
+	my @promoters = ();
+	open(IN,"$epactsdir/bin/tabix $cellf chr$region|") || die "Cannot open $cellf\n";
+	while(<IN>) {
+	    my ($chr,$beg,$end,$state) = split;
+	    $chr =~ s/^chr//;
+ 	    if ( ( $state =~ /Enhancer/ ) || ( $state =~ /^[4567]$/ ) ) {
+
+		push(@enhancers,[$beg+1,$end]);
+	    }
+ 	    elsif ( ( $state =~ /Promoter/ ) || ( $state =~ /^[123]$/ ) ) {
+		push(@promoters,[$beg+1,$end]);
+	    }
+	}
+	close IN;
+
+	if ( $#enhancers >= 0 ) {
+	    my $iex = 0;
+	    for(my $k=0; $k < @bps; ++$k) {
+		if ( $bps[$k] < $enhancers[$iex]->[0] ) { next; }
+		elsif ( $bps[$k] <= $enhancers[$iex]->[1] ) { $annos[$k] = 1; }
+		else {
+		    while ( ( $iex <= $#enhancers ) 
+			    && ( $bps[$k] >= $enhancers[$iex]->[1] ) )
+		    { ++$iex; }
+		}
+		last if ( $iex > $#enhancers );
+	    }
+	}
+
+	if ( $#promoters >= 0 ) {
+	    my $iex = 0;
+	    for(my $k=0; $k < @bps; ++$k) {
+		if ( $bps[$k] < $promoters[$iex]->[0] ) { next; }
+		elsif ( $bps[$k] <= $promoters[$iex]->[1] ) { $annos[$k] = 2; }
+		else {
+		    while ( ( $iex <= $#promoters ) 
+			    && ( $bps[$k] >= $promoters[$iex]->[1] ) )
+		    { ++$iex; }
+		}
+		last if ( $iex > $#promoters );
+	    }
+	}
+    }
+    else {
+	for(my $i=0; $i < @bps; ++$i) {
+	    $annos[$i] = $r2s[$i] < 0.1 ? 3 : ( $r2s[$i] < 0.5 ? 2 : ( $r2s[$i] < 0.8 ? 1 : 0));
+	}
+    }
+
+    my $width = 5;
+    open(CMD,">$outf.cmd") || die "Cannot open $outf file for writing\n";
+    print CMD "set terminal postscript eps color enhanced dashed dashlength 1.0 linewidth 1.0 size $width,3.2 font 'Calibri,15' fontfile 'calibri.pfb' fontfile 'GillSansMT.pfb' fontfile 'GillSansItalic.pfb'\n";
+    print CMD "set out '$outf.eps'\n";
+    print CMD "set tmargin 0.3\n";
+    print CMD "set bmargin 0\n";
+    print CMD "set lmargin 7\n";
+    print CMD "set rmargin 7\n";
+    print CMD "set multiplot layout 2,1 title ".($title ? "'$title'" : "'$chr:$plotStart-$plotEnd, index SNP $pos'")." font 'GillSansMT,18'\n";
+    print CMD "set x2range [$bufferedStartMb:$bufferedEndMb]\n";
+    print CMD "set yrange [0:*]\n";
+    print CMD "set format x2 \"\"\n";
+    print CMD "set x2tics nomirror out\n";
+    print CMD "set xrange [$bufferedStartMb:$bufferedEndMb]\n";
+    print CMD "unset xtics\n";
+    print CMD "set ytics nomirror out\n";
+#print CMD "set ylabel 'r^2 with index SNP' offset 2\n";
+    print CMD "set ylabel '-log_{10} (p-value)' offset 2\n";
+    print CMD "set grid x2 y\n";
+    print CMD "set y2range [0:100]\n";
+    print CMD "set y2tics nomirror out\n";
+    print CMD "set y2label 'Recombination rate (cM/Mb)' offset -2\n";
+#print CMD "set obj 99 rect behind from 62.098986,0 to 62.5206,100 fc rgb \"#DDDDFF\" fs solid noborder\n";
+    print CMD "set obj 100 rect behind from ".($shadeStart/1e6).",0 to ".($shadeEnd/1e6).",100 fc rgb \"#FFFFCC\" fs solid noborder\n" if ( $shade );
+    print CMD "plot NaN with points notitle";
+    print CMD ", ".(0-log($sigThres)/log(10))." with lines lt 1 lw 2 lc rgbcolor '#FF0000' notitle" if ( $sigThres > 0 );
+    my @xs = ();
+    my @ys = ();
+    my @colors = (0xFF3300,0x00AA00,0x0000AA,0x888888);
+    my @pts = (7,5,9,11);
+    my @maflegends = ("MAF [0.05,0.50]","MAF [0.01,0.05)","MAF (0.005,0.01]","MAF [0,.005)");
+    my @r2legends = ($cellType ? ("Coding","Enhancer","Promoter","Others") : ("r^2 [0.8 1.0]","r^2 [0.5 0.8)","r^2 [0.1 0.5)","r^2 [0.0 0.1)") );
+    my $indexpt = 7;
+    my $indexcol = "'#FFD700'";
+    for(my $i=0; $i < @bps; ++$i) {
+	next if ( $pvals[$i] eq "NA" );
+	push(@xs,$bps[$i]/1e6);
+	push(@ys,0-log10($pvals[$i]));
+	my $pt = $pts[($mafs[$i] >= 0.05 ) ? 0 : ( $mafs[$i] >= 0.01 ? 1 : ( $mafs[$i] >= 0.005 ? 2 : 3 ))];
+	#my $col = sprintf("'#%0X'",$colors[$r2s[$i] < 0.1 ? 3 : ( $r2s[$i] < 0.5 ? 2 : ( $r2s[$i] < 0.8 ? 1 : 0))]);
+	my $col = sprintf("'#%0X'",$colors[$annos[$i]]);
+	if ( $bps[$i] == $indexbp ) {
+	    $indexpt = $pt;
+	    $indexcol = $col;
+	}
+	print CMD ",";
+	print CMD " '-' u 1:2 with points ps $pointsize pt $pt lc rgbcolor $col notitle axis x2y1";
+	print CMD ", '-' u 1:2 with points ps $pointsize pt ".($pt-1)." lc rgbcolor '#000000' notitle axis x2y1";
+    }
+    print CMD ", '-' u 1:2 with lines lt 1 lw 3 lc rgbcolor \"#6600FF\" notitle axis x2y2";
+    print CMD ", '-' u 1:2 with points ps ".($pointsize*1.5)." pt $indexpt lw 3 lc rgbcolor $indexcol notitle axis x2y1";
+    print CMD ", '-' u 1:2 with points ps ".($pointsize*1.5)." pt ".($indexpt-1)." lw 3 lc rgbcolor '#000000' notitle axis x2y1";
+    #print CMD ",'-' u 1:2:3 with points pt 7 lc rgbcolor variable notitle axis x2y1";
+    print CMD "\n";
+    for(my $i=0; $i < @xs; ++$i) {
+	print CMD "$xs[$i]\t$ys[$i]\ne\n";
+	print CMD "$xs[$i]\t$ys[$i]\ne\n";
+    }
+    open(IN,"$epactsdir/bin/tabix $map $region |") || die "Cannot open file\n";
+    while(<IN>) {
+	my ($chr,$bp,$rate) = split;
+	printf CMD ("%.6lf\t$rate\n",$bp/1e6);
+    }
+    close IN;
+    print CMD "e\n";
+    print CMD ($indexbp/1e6)."\t".(0-log10($indexp))."\n";
+    print CMD "e\n";
+    print CMD ($indexbp/1e6)."\t".(0-log10($indexp))."\n";
+    print CMD "e\n";
+
+    my $nobj = 1;
+    my $ystep = 0.1;
+    my $y;
+    my $ymstep = 0.01;
+    my $yoffset = -0.05;
+    my $geneFontSize = ($#genes > 5) ? ( $#genes > 11 ? 12 : 14 ) : 16;
+    my @geneEnds = ();
+    for(my $i=0; $i < @genes; ++$i) {
+	my ($geneName,$txStart,$txEnd) = ($genes[$i]->[0],$genes[$i]->[1],$genes[$i]->[2]);
+	my ($xStart,$xEnd,$xLabel,$xAlign);
+	my $lenLabel = ($bufferedEndMb-$bufferedStartMb) * 0.02 * $geneFontSize / 10 * length($geneName);
+	if ( $txStart > $bufferedStartMb + $lenLabel ) {
+	    $xLabel = $txStart - ($bufferedEndMb-$bufferedStartMb) * 0.01;
+	    $xAlign = "right";
+	    $xStart = $txStart - $lenLabel;
+	    $xEnd = $txEnd;
+	}
+	else {
+	    $xLabel = $txEnd + ($bufferedEndMb-$bufferedStartMb) * 0.01;
+	    $xAlign = "left";
+	    $xStart = $txStart;
+	    $xEnd = $txEnd + $lenLabel;
+	}
+	my $geneIdx = 0;
+	while ( $geneIdx <= $#geneEnds ) {
+	    if ( $geneEnds[$geneIdx] > $xStart ) {
+		++$geneIdx;
+	    }
+	    else {
+		$geneEnds[$geneIdx] = $xEnd;
+		last;
+	    }
+	}
+	if ( $geneIdx > $#geneEnds ) {
+	    push(@geneEnds,$xEnd);
+	}
+	$y = $yoffset+(0-$geneIdx-0.5)*$ystep;
+	my $yu = sprintf("%.3lf",$y+$ymstep);
+	my $yl = sprintf("%.3lf",$y-$ymstep);
+	my ($name,$start2,$end2) = ($genes[$i]->[0],$genes[$i]->[1],$genes[$i]->[2]);
+	print CMD "set label $nobj '$name' at $xLabel,$yu $xAlign front nopoint tc rgb '#000000' font 'GillSansMT,$geneFontSize'\n";
+	++$nobj;
+	print CMD "set obj $nobj rect from $txStart,$yu to $txEnd,$yl fc rgb '#000000'\n";
+	++$nobj;
+	my $nExons = $#{$genes[$i]->[3]}+1;
+	for(my $j=0; $j < $nExons; ++$j) {
+	    $yu = sprintf("%.3lf",$y+$ystep/2);
+	    $yl = sprintf("%.3lf",$y-$ystep/2);
+	    my ($exStart,$exEnd) = ($genes[$i]->[3]->[$j]/1e6,$genes[$i]->[4]->[$j]/1e6);
+	    print CMD "set obj $nobj rect from $exStart,$yu to $exEnd,$yl fc rgb '#000000'\n";
+	    ++$nobj;
+	}
+    }
+    $y = $yoffset+(0-$#geneEnds-0.5)*$ystep;
+    $y = ($y < -0.5) ? ($y - $ystep) : (-0.5 - $ystep);
+    print CMD "set tmargin 0\n";
+    print CMD "set bmargin 6\n";
+    print CMD "set yrange [$y:0]\n";
+    print CMD "set ytics 0,1\n";
+    print CMD "set ylabel ''\n";
+    print CMD "set xlabel 'Base Positions in Chromosome $chr (Mb)' offset 0,0.5\n";
+    print CMD "unset x2tics\n";
+    print CMD "unset y2tics\n";
+    print CMD "unset y2label\n";
+    print CMD "set xtics nomirror out\n";
+    print CMD "set grid x\n";
+    print CMD "set xrange [$bufferedStartMb:$bufferedEndMb]\n";
+    print CMD "set key box below width -3 samplen 0\n";
+#print CMD "unset key\n";
+    print CMD "plot NaN with points notitle";
+    for(my $i=0; $i < @colors; ++$i) {
+	print CMD ", NaN with points pt 7 lc rgbcolor ".sprintf("'#%0X'",$colors[$i])." title '$r2legends[$i]'";
+    }
+    for(my $i=0; $i < @pts; ++$i) {
+	print CMD ", NaN with points pt $pts[$i] lc rgbcolor '#000000' title '$maflegends[$i]'";
+    }
+    #print CMD ", NaN with boxes fillstyle solid lc rgb \"#FFFFCC\" title 'r^2>$minr2+$cmext cM'" if ( $shade );
+    print CMD "\n";
+    close CMD;
+
+    my $setenv = "export GDFONTPATH=$datadir; export GNUPLOT_FONTPATH=$datadir; export GNUPLOT_PS_DIR=$datadir; export PATH=\$PATH:$epactsdir/bin/; export GNUPLOT_PFBTOPFA=\"$binpfbtops %s\"";
+
+    my $cmd = "$setenv; $bingnuplot $outf.cmd";
+    print STDERR "$cmd\n";
+    print STDERR `$cmd`;
+    die "FATAL ERROR: Error occured while running gnuplot" if ( $? == -1 ); 
+
+    $cmd = "$setenv; $binepstopdf $outf.eps;"; # rm $outf.cmd; rm $outf.eps";
+    print STDERR "$cmd\n";
+    print STDERR `$cmd`;
+    die "FATAL ERROR: Error occured while running epstopdf" if ( $? == -1 ); 
+
+    unlink("$outf.eps");
+    unlink("$outf.cmd");
+}

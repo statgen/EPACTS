@@ -1,0 +1,266 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Cwd;
+use File::Basename;
+use FindBin;
+use lib "$FindBin::Bin";
+use wGetOptions qw(wpod2usage wGetOptions);
+use epacts qw(@chrs @szchrs parsePheno $binmake $binrm readPedVcf);
+
+my $vcf = "";
+my $out = "";
+my $chr = "";
+my $field = "GT";
+my $ped = "";
+my $unit = 10000000;
+my $minMAF = 0.01;
+my $minCallRate = 0.95;
+my $pass = "";
+my $rule = "";
+my $sepchr = "";
+my $run = -1;
+my $restart = "";
+my $removeComplex = "";
+my $bedComplex = "";
+my $includeSexChr = "";
+my $mosixNodes = "";
+my @complex = (["5",44000001,52000000],["6",24000001,36000000],["8",8000001,12000000],["11",42000001,58000000],["17",40000001,43000000]);
+
+## Parse options and print usage if there is a syntax error,
+## or if usage was explicitly requested.
+wGetOptions(
+    "-Create kinship matrix from VCF file for EPACTS",
+
+    "--Required Options",
+    "vcf=s",[\$vcf,
+	     "Input VCF file (tabixed and bgzipped)",
+	     "Input VCF file to calculate kinship matrix from. The VCF file must be tabixed and bgzipped"
+	     ],
+    "out=s",[\$out,
+	     "Output kinship file name",
+	     ],
+
+    "--Key Options",
+    "ped=s",[\$ped,
+	     "PED file containing subset of individuals to include",
+	     "PED format file containing a subset of individuals to include in the kinship matrix calculation"
+	     ],
+    "field=s",[\$field,
+	       "VCF's FORMAT field of genotypes or dosages",
+	       "Entry in the FORMAT field in the VCF to extract the genotype information from. Typically GT is used"
+	       ],
+    "unit=i",[\$unit,
+	      "Base pair units for a parallel run",
+	      "Chunk size (in bp) as a unit for parallelizd run for calculating kinship matrix"
+	      ],
+    "min-maf=f",[\$minMAF,
+		 "Minimum minor allele frequency",
+		 "Minimum minor allele frequency. 0.01 is recommended",
+		 ],
+    "min-callrate=f",[\$minCallRate,
+		      "Minimum call rate",
+		      "Minimum genotype call rate (1-missing rate) for each variant. 0.95 is recommended",
+		      ],
+    "run=i",[\$run,
+	     "Run immediately with specified # CPUs",
+	     "Automatically runs GNU make after creating the Makefile. If this is not set, the user must run GNU make separately for finishing the run of epacts-make-kin",
+	     ],
+    "sepchr",[\$sepchr,
+	      "VCFs are separated by chromosomes",
+	      "Indicator of separated VCF by chromosomes. The VCF file name must contain chr1, chr2, chr3,....",
+	      ],
+    "remove-complex",[\$removeComplex,
+		      "Remove complex regions with high LD",
+		      "Remove known complex regions with high linkage disequilibrium",
+		      ],
+
+    "--Additional Options",
+    "rule=s",[\$rule,
+	      "Substring in the INFO field to be matched",
+	      "Option to select a subset of variants based on INFO field. This select only the variants with particular subseting included in the VCF",
+	      ],
+    "chr=s",[\$chr,
+	     "Run only a single chromosome",
+	     "Runing only a single chromosome, instead of running all autosomal chromosomes to calculate the kinship matrix",
+	     ],
+    "pass",[\$pass,
+	    "Use only PASS-filtered sites",
+	    "Include only variants with PASS in the FILTER column in the VCF when calculating the kinship coefficient",
+	    ],
+    "restart",[\$restart,
+	       "Ignore intermediate results and restart from scratch",
+	       "Ignore intermediate results and restart from scratch. Equivalent to running GNU make with -B option",
+	       ],
+    "bed-complex=s",[\$bedComplex,
+		     "Custom BED file to specify the complex region",
+		     "Custom BED file to specify the complex region to be excluded in the kinshop calculation"
+		     ],
+    "include-sex-chr",[\$includeSexChr,
+		       "Include sex chromosome (not recommended)",
+		       "Include sex chromosomes (chrX and chrY) for calculating the kinship coefficient. This option may create batch effect between individuals with opposite sex",
+		       ],
+    "mosix-nodes=s",[\$mosixNodes,
+		     "Comma-separated list of MOSIX cluster nodes",
+		    ],
+    ) || wpod2usage(2);
+
+unless ( ( $vcf ) && ( $out ) ) {
+    print STDERR "ERROR: Missing required option\n";
+    wpod2usage(2);
+}
+
+$minMAF = sprintf("%lg",$minMAF);
+$minCallRate = sprintf("%lg",$minCallRate);
+
+my $epactsdir = dirname($FindBin::Bin);
+
+#$epactsdir =~ s/\/[^\/]+$//;
+
+## preprocess input VCF files to get the list of individual IDS
+die "ERROR: Cannot open $vcf\n" unless ( -s $vcf );
+
+my $optind = "";
+if ( $ped ) {
+    my ($rVcfIds,$rhPhes,$rhCovs) = &readPedVcf($epactsdir,$ped,$vcf);
+    my @vcfIds = @{$rVcfIds};
+    my %hPhes = %{$rhPhes};
+    my %hCovs = %{$rhCovs};
+    
+    open(IND,">$out.ind") || die "Cannot open IND file $out.ind for writing\n";
+    my $nInds = 0;
+    for(my $i=0; $i < @vcfIds; ++$i) {
+	my $id = $vcfIds[$i];
+	if ( defined($hPhes{$id}) ) {
+	    print IND "$id\t".($i+1)."\n";
+	    ++$nInds;
+	}
+    }
+    close IND;
+    $optind = "--indf $out.ind";
+}
+
+if ( ( ! $sepchr ) && ( $vcf =~ /chr/ ) && ( ! $chr ) ) {
+    print STDERR "*************************************************************************************\n";
+    print STDERR "******* IMPORTANT WARNING ***********************************************************\n";
+    print STDERR "******* If your VCF is separated by chromosome, you must put set --sepchr option ****\n";
+    print STDERR "******* Otherwise, you may end up having only single chromosome's result ************\n";
+    print STDERR "*************************************************************************************\n";
+}
+
+open(MAK,">$out.Makefile") || die "Cannot open file\n";
+print MAK ".DELETE_ON_ERROR:\n\n";
+
+my @kins = ();
+my @kcmds = ();
+my @tgts = ();
+my @cmds = ();
+
+for(my $i=0; $i < @chrs; ++$i) {
+    if ( ( $chr eq "" ) || ( $chrs[$i] eq $chr ) ) {
+	my $szchr = $szchrs[$i];
+	print STDERR "Kinship : Processing chromosome $chrs[$i]...\n";
+	my $cvcf = $vcf;
+	if ( $sepchr ) {
+	    die "ERROR: with --sepchr option, $vcf must contain chr1" unless ( $vcf =~ /chr1/ );
+	    $cvcf =~ s/chr1/chr$chrs[$i]/g;
+	    unless ( -s $cvcf ) {
+		print STDERR "WARNING: $cvcf does not exist. Skipping..\n";
+		next;
+	    }
+	}
+	    
+	for(my $j=1; $j < $szchr; $j += $unit) {
+	    my ($start,$end) = ($j,$j+$unit-1);
+	    $end = $szchr if ( $end > $szchr );
+	    my $op = "$out.$chrs[$i].$start.$end";
+	    my $region = "$chrs[$i]:$start-$end";
+
+	    ## calculate per-region kinship if needed only for chr1-22
+	    if ( ( $chrs[$i] =~ /^\d+$/) || ( $chrs[$i] =~ /^chr\d+/ ) || ($includeSexChr) ) {
+		## exclude following complex regions recommended by
+		## chr5:44M-52M
+		## chr6:24M-36M
+		## chr8:8M-12M
+		## chr11:42-58M
+		## chr17:40-43M
+
+		my $region2 = "";
+		if ( $removeComplex ) {
+		    if ( $bedComplex ) {
+			@complex = ();
+			open(BED,$bedComplex) || die "Cannot open file\n";
+			while(<BED>) {
+			    my ($chr,$beg,$end) = split;
+			    push(@complex,[$chr,$beg,$end]);
+			}
+			close BED;
+		    }
+
+		    foreach my $complex (@complex) {
+			my ($cchr,$cstart,$cend) = @{$complex};
+			if ( ( $chrs[$i] eq $cchr ) && ( $start <= $cend ) && ( $end >= $cstart ) ) {
+			    if ( ( $start >= $cstart ) && ( $end <= $cend ) ) { $region = ""; }
+			    elsif ( $start >= $cstart ) { $region = sprintf("$chrs[$i]:%d-$end",$cend+1); }
+			    elsif ( $end <= $cend ) { $region = sprintf("$chrs[$i]:$start-%d",$cstart-1); }
+			    else { 
+				$region = sprintf("$chrs[$i]:$start-%d",$cstart-1);
+				$region2 = sprintf("$chrs[$i]:%d-$end",$cend+1);
+			    }
+			    last;
+			}
+		    }
+		}
+		my @regions = ();
+		push(@regions,$region) if ( $region );
+		push(@regions,$region2) if ( $region2 );
+
+		foreach my $reg (@regions) {
+		    my ($rchr,$rstart,$rend) = split(/[:\-]/,$reg);
+		    $op = "$out.$rchr.$rstart.$rend";
+		    my $kin = "$op.kin";
+		    my $cmd = "$epactsdir/bin/pEmmax gen-kin --vcf $cvcf $optind --region $reg --field $field --minMAF $minMAF --minCallRate $minCallRate --out-kinf $kin --raw".($pass ? "" : " --ignoreFilter").($rule ? " --rule $rule" : "");
+		    if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+		    $cmd = "\t$cmd\n";
+		    
+		    push(@kins,$kin);
+		    push(@kcmds,$cmd);
+		}
+	    }
+	}
+    }
+}
+
+my $outkinf = $out;
+
+print MAK "all: $outkinf\n\n";
+print MAK "$outkinf: @kins\n";
+print MAK "\t$epactsdir/bin/pEmmax merge-kin --out-kinf $outkinf @kins\n";
+print MAK "\t$binrm -f @kins\n";
+for(my $i=0; $i < @kins; ++$i) {
+    print MAK "$kins[$i]: $vcf\n";
+    print MAK "$kcmds[$i]\n";
+}
+
+print "Finished generating EPACTS Makefile\n";
+if ( $run < 0 ) {
+    print "EPACTS will run the with the following commond:\n";
+    print "\tmake -f $out.Makefile -j [# of parallel jobs]\n";
+    print "Or perform sanity checking using the following command:\n";
+    print "\tmake -f $out.Makefile -n\n";
+}
+elsif ( $run == 0 ) {
+    print "Running maximum parallel jobs of EPACTS\n";
+    my $cmd = "$binmake -f $out.Makefile -j ".(($restart) ? " -B" : "");
+    print "$cmd\n";
+    print `$cmd`;
+    die "FATAL ERROR - epacts-make-kin: Error occured while running make" if ( $? == -1 ); 
+}
+else {
+    print "Running $run parallel jobs of EPACTS\n";
+    my $cmd = "$binmake -f $out.Makefile -j $run".(($restart) ? " -B" : "");
+    print "$cmd\n";
+    print `$cmd`;
+    die "FATAL ERROR - epacts-make-kin: Error occured while running make" if ( $? == -1 ); 
+}
+
