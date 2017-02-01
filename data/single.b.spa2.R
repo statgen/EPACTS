@@ -61,7 +61,7 @@ getroot_K1<-function(init,mu,g,q,m1,tol=.Machine$double.eps^0.25,maxiter=1000)
 	g.neg<- sum(g[which(g<0)])
 	if(q>=g.pos || q<=g.neg)
 	{
-		return(list(root=init,n.iter=0,Is.converge=FALSE))
+		return(list(root=Inf,n.iter=0,Is.converge=TRUE))
 	} else {
 		t<-init
 		K1_eval<-K1_adj(t,mu,g,q)
@@ -90,7 +90,7 @@ getroot_K1<-function(init,mu,g,q,m1,tol=.Machine$double.eps^0.25,maxiter=1000)
 			newK1<-K1_adj(tnew,mu,g,q)
 			if(sign(K1_eval)!=sign(newK1))
 			{
-				if(abs(tnew-t)>prevJump)
+				if(abs(tnew-t)>prevJump-tol)
 				{
 					tnew<-t+sign(newK1-K1_eval)*prevJump/2
 					newK1<-K1_adj(tnew,mu,g,q)
@@ -293,8 +293,8 @@ Saddle_Prob<-function(q, mu, g, Cutoff=2){
 		alpha<-5*10^-5
 		p<-B+alpha/2
 		Cutoff=ifelse(p>=0.496,0.01,qnorm(p,lower.tail=F))
-	} else if(Cutoff < 10^-2){
-		Cutoff=10^-2
+	} else if(Cutoff < 10^-1){
+		Cutoff=10^-1
 	} 
 	
 	#
@@ -371,8 +371,8 @@ Saddle_Prob_NR<-function(q, mu, g, Cutoff=2){
 		alpha<-5*10^-5
 		p<-B+alpha/2
 		Cutoff=ifelse(p>=0.496,0.01,qnorm(p,lower.tail=F))
-	} else if(Cutoff < 10^-2){
-		Cutoff=10^-2
+	} else if(Cutoff < 10^-1){
+		Cutoff=10^-1
 	} 			
 	#
 
@@ -676,8 +676,8 @@ Saddle_Prob_OldNR<-function(q, g,mu,gNA,gNB,muNA,muNB,Cutoff=2){
 		alpha<-5*10^-5
 		p<-B+alpha/2
 		Cutoff=ifelse(p>=0.496,0.01,qnorm(p,lower.tail=F))
-	} else if(Cutoff < 10^-2){
-		Cutoff=10^-2
+	} else if(Cutoff < 10^-1){
+		Cutoff=10^-1
 	} 
 			
 	#
@@ -716,7 +716,7 @@ getroot_K1_Old<-function(init,mu,g,q,m1,gNA,gNB,muNA,muNB,NAmu,NAsigma,tol=.Mach
 	g.neg<- sum(g[which(g<0)])
 	if(q>=g.pos || q<=g.neg)
 	{
-		return(list(root=init,n.iter=0,Is.converge=FALSE))
+		return(list(root=Inf,n.iter=0,Is.converge=TRUE))
 	} else {
 		t<-init
 		K1_eval<-K1_adj_Old(t,mu,g,q,gNA,gNB,muNA,muNB,NAmu,NAsigma)
@@ -745,7 +745,7 @@ getroot_K1_Old<-function(init,mu,g,q,m1,gNA,gNB,muNA,muNB,NAmu,NAsigma,tol=.Mach
 			newK1<-K1_adj_Old(tnew,mu,g,q,gNA,gNB,muNA,muNB,NAmu,NAsigma)
 			if(sign(K1_eval)!=sign(newK1))
 			{
-				if(abs(tnew-t)>prevJump)
+				if(abs(tnew-t)>prevJump-tol)
 				{
 					tnew<-t+sign(newK1-K1_eval)*prevJump/2
 					newK1<-K1_adj_Old(tnew,mu,g,q,gNA,gNB,muNA,muNB,NAmu,NAsigma)
@@ -869,3 +869,5 @@ single.b.spa2 <- function() {
 
     return(list(p=p, add=add, cname=cname))
 }
+
+
