@@ -54,6 +54,8 @@ binaryFlag <- is.binary(pheno)
 ind <- as.integer(read.table(indf)[,2])-1
 
 G <- .Call("readVcf",vcf,region,field,passOnly,ind,NULL)
+rnames <- rownames(G)
+rownames(G) <- seq_along(rnames)
 m <- nrow(G)
 if ( m > 0 ) {
   n <- ncol(G)
@@ -69,10 +71,10 @@ if ( m > 0 ) {
   rsq <- (sqAC-AC*AC/(NS+1e-30))/(AC - AC*AC/(2*NS+1e-30))
   rsq[rsq>1] <- 1
   if ( minRSQ > 0 ) {
-    vids <- which(unname((varAC > 0) & (MAF >= minMAF) & (MAF <= maxMAF ) & ( MAC >= minMAC ) & ( MAC <= maxMAC) & (CR >= minCallRate) &  (rsq >= minRSQ)))
+    vids <- which((varAC > 0) & (MAF >= minMAF) & (MAF <= maxMAF ) & ( MAC >= minMAC ) & ( MAC <= maxMAC) & (CR >= minCallRate) &  (rsq >= minRSQ))
   }
   else {
-    vids <- which(unname((varAC > 0) & (MAF >= minMAF) & (MAF <= maxMAF) & ( MAC >= minMAC ) & ( MAC <= maxMAC) & (CR >= minCallRate)))
+    vids <- which((varAC > 0) & (MAF >= minMAF) & (MAF <= maxMAF) & ( MAC >= minMAC ) & ( MAC <= maxMAC) & (CR >= minCallRate))
   }
   genos <- G[vids,,drop=FALSE]
 
@@ -132,7 +134,7 @@ if ( m > 0 ) {
   if ( binaryFlag ) {
     out[,5+ncol(r$add)+1:4] <- binary.add
   }
-  rownames(out) <- rownames(G)
+  rownames(out) <- rnames # rownames(G)
   print(warnings())
   .Call("writeMatrix",out,outf)
 } else {
