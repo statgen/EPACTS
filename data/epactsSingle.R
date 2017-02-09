@@ -69,10 +69,10 @@ if ( m > 0 ) {
   rsq <- (sqAC-AC*AC/(NS+1e-30))/(AC - AC*AC/(2*NS+1e-30))
   rsq[rsq>1] <- 1
   if ( minRSQ > 0 ) {
-    vids <- which((varAC > 0) & (MAF >= minMAF) & (MAF <= maxMAF ) & ( MAC >= minMAC ) & ( MAC <= maxMAC) & (CR >= minCallRate) &  (rsq >= minRSQ))
+    vids <- which(unname((varAC > 0) & (MAF >= minMAF) & (MAF <= maxMAF ) & ( MAC >= minMAC ) & ( MAC <= maxMAC) & (CR >= minCallRate) &  (rsq >= minRSQ)))
   }
   else {
-    vids <- which((varAC > 0) & (MAF >= minMAF) & (MAF <= maxMAF) & ( MAC >= minMAC ) & ( MAC <= maxMAC) & (CR >= minCallRate))
+    vids <- which(unname((varAC > 0) & (MAF >= minMAF) & (MAF <= maxMAF) & ( MAC >= minMAC ) & ( MAC <= maxMAC) & (CR >= minCallRate)))
   }
   genos <- G[vids,,drop=FALSE]
 
