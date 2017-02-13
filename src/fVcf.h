@@ -423,7 +423,7 @@ public:
     std::string markerKey;
     std::string s;
     int keyIdx = 0;
-    int i, j, k;
+    int i, j, k, l;
     int lKey = (int)key.size();
     int AN = 0;
     float AC = 0, sqAC = 0;
@@ -493,14 +493,16 @@ public:
 	    k = 0;
 	    keyIdx = 0;
 	    p = pch;
+            l = 0;
 	    while( p < nch ) {
 	      if ( *p == ':' ) { 
-		if ( k >= lKey ) {
+		if (( k >= lKey ) && ( k == l )) {
 		  break;
 		}
 		else {
 		  ++keyIdx;
 		  k = 0;
+                  l = 0;
 		}
 	      }
 	      else {
@@ -511,10 +513,11 @@ public:
 		else {
 		  k = 0;
 		}
+                ++l;
 	      }
 	      ++p;
 	    }
-	    if ( ( p == nch ) && ( k != lKey ) ) {
+	    if ( ( k != l ) || ( k != lKey ) ) {
 	      warning("Cannot find %s in the FORMAT field at marker %s:%s_%s/%s .. Skipping",key.c_str(),chrom.c_str(),pos.c_str(),ref.c_str(),alt.c_str());
 	      return -1;
 	    }
