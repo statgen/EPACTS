@@ -2,7 +2,7 @@ dist_pkgdata_DATA = epactsSingle.R epactsGroup.R epactsMulti.R mmSKAT_0.95.tar.g
 	group.b.collapse.R group.b.madsen.R group.q.reverse.R group.skat.R group.b.burden.R \
 	group.mmskat.R group.b.wcnt.R group.q.wilcox.R \
 	single.b.firth.R single.b.firthCov.R single.b.wald.R single.q.reverse.R \
-	single.b.spa.R single.b.spa2.R single.b.sna0.R single.b.sna2.R \
+	single.b.spa2.R single.b.sna0.R single.b.sna2.R \
 	single.b.lrt.R single.q.linear.R single.q.wilcox.R single.q.lm.R single.b.score.R \
 	single.q.emmaxR.R \
 	multi.q.linear.R \
