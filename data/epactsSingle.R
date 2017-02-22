@@ -54,6 +54,8 @@ binaryFlag <- is.binary(pheno)
 ind <- as.integer(read.table(indf)[,2])-1
 
 G <- .Call("readVcf",vcf,region,field,passOnly,ind,NULL)
+rnames <- rownames(G)
+rownames(G) <- seq_along(rnames)
 m <- nrow(G)
 if ( m > 0 ) {
   n <- ncol(G)
@@ -70,8 +72,7 @@ if ( m > 0 ) {
   rsq[rsq>1] <- 1
   if ( minRSQ > 0 ) {
     vids <- which((varAC > 0) & (MAF >= minMAF) & (MAF <= maxMAF ) & ( MAC >= minMAC ) & ( MAC <= maxMAC) & (CR >= minCallRate) &  (rsq >= minRSQ))
-  }
-  else {
+  } else {
     vids <- which((varAC > 0) & (MAF >= minMAF) & (MAF <= maxMAF) & ( MAC >= minMAC ) & ( MAC <= maxMAC) & (CR >= minCallRate))
   }
   genos <- G[vids,,drop=FALSE]
@@ -108,8 +109,7 @@ if ( m > 0 ) {
     #binary.add[,4] <- rowSums((matrix(pheno,nrow(G),ncol(G),byrow=T) == 0) * G * (1-ina), na.rm=T)/binary.add[,2]
     #binary.add[binary.add[,1] == 0,3] <- NA
     #binary.add[binary.add[,2] == 0,4] <- NA
-  }
-  else {
+  } else {
     binary.cname <- NULL
     binary.ncols <- 0
   }
@@ -123,8 +123,7 @@ if ( m > 0 ) {
   if ( minRSQ > 0 ) {
     colnames(out) <- c("NS","AC","CALLRATE","MAF","PVALUE",r$cname,"RSQ",binary.cname);
     out[,6+ncol(r$add)] <- rsq
-  }
-  else {
+  } else {
     colnames(out) <- c("NS","AC","CALLRATE","MAF","PVALUE",r$cname,binary.cname);
   }
   out[vids,5] <- r$p
@@ -132,7 +131,17 @@ if ( m > 0 ) {
   if ( binaryFlag ) {
     out[,5+ncol(r$add)+1:4] <- binary.add
   }
-  rownames(out) <- rownames(G)
+  rownames(out) <- rnames
+  
+  if (class(try(rnames[seq_along(rnames)], silent = TRUE)) == "try-error") {
+    tmp <- rownames(out)
+    goodnames <- sapply(seq_along(tmp), function (iname) {
+      class(try(tmp[iname], silent = TRUE)) != "try-error"
+    })
+    out <- out[which(goodnames), ]
+    cat(paste(sum(!goodnames), 'variants have been excluded due to error: "Value of SET_STRING_ELT() must be a \'CHARSXP\' not a \'integer\'"'), file = paste0(outf, ".log"))
+  } else {}
+  
   print(warnings())
   .Call("writeMatrix",out,outf)
 } else {
