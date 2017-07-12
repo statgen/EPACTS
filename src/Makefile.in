@@ -590,9 +590,9 @@ noinst_HEADERS = hDist.h \
 	GitVersion.h ksort.h ncStat.h pFile.h TabixReader.h AnnotationResult.h \
 	bgix.h Codon.h FreqTable.h genomeLoci.h genomePosition.h IO.h kstring.h OrderedMap.h \
 	PhredHelper.h SequenceUtil.h TypeConversion.h AnnotationString.h bgzf.h \
-	codonHelper.h fVcf.h GenomeScore.h khash.h locusStat.h Parameters.h Priority.h \
+	codonHelper.h fVcf.h genomeScore.h khash.h locusStat.h Parameters.h Priority.h \
 	StringTemplate.h Type.h Argument.h boolExprParser.h Common.h GeneAnnotation.h \
-	genomeScore.h LineBreaker.h knetfile.h LogFile.h pEmmax.h pVcf.h StringUtil.h \
+	GenomeScore.h LineBreaker.h knetfile.h LogFile.h pEmmax.h pVcf.h StringUtil.h \
 	wFile.h \
 	$(EIGEN_HEADER_FILES)
 
@@ -603,7 +603,7 @@ vcfast_SOURCES = vcfast.cpp Error.cpp PhredHelper.cpp Parameters.cpp codonHelper
 vcfast_LDADD = libtabix.a
 chaps_SOURCES = chaps.cpp Error.cpp PhredHelper.cpp Parameters.cpp
 chaps_LDADD = libtabix.a
-anno_SOURCES = Anno.cpp IO.cpp Error.cpp
+anno_SOURCES = Anno.cpp IO.cpp
 anno_LDADD = libtabix.a
 bgzip_SOURCES = bgzip.c bedidx.c bgzf.c knetfile.c kstring.c
 tabix_SOURCES = tabix.c bedidx.c bgzf.c knetfile.c kstring.c index.c
