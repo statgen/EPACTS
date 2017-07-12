@@ -91,7 +91,7 @@ int runGenKin(int argc, char** argv) {
 	sigma = sqrt(mu * (2. - mu) / 2.);
 	if ( arg.BN ) {
 	  for(j=0; j < emx.tvcf.nInds; ++j) {
-	    if ( isnanf(emx.tvcf.genos[j + offset]) ) {
+	    if ( std::isnan(emx.tvcf.genos[j + offset]) ) {
 	      genos(j,m) = 0;
 	    }
 	    else {
@@ -105,7 +105,7 @@ int runGenKin(int argc, char** argv) {
 	}
 	else if ( arg.IBS ) {
 	  for(j=0; j < emx.tvcf.nInds; ++j) {
-	    if ( isnanf(emx.tvcf.genos[j + offset]) ) {
+	    if ( std::isnan(emx.tvcf.genos[j + offset]) ) {
 	      genos(j,m) = (mu - 1);
 	    }
 	    else {
@@ -476,7 +476,7 @@ int runAssoc(int argc, char** argv) {
 	int offset = i * emx.tvcf.nInds;
 	mu = emx.tvcf.alleleFreq(i)*2.;
 	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( isnanf(emx.tvcf.genos[j + offset]) ) {
+	  if ( std::isnan(emx.tvcf.genos[j + offset]) ) {
 	    x(j) = mu;
 	  }
 	  else {
@@ -674,7 +674,7 @@ int runBurdenAssoc(int argc, char** argv) {
 	++nPass;
 	mu = emx.tvcf.alleleFreq(i)*2.;
 	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( !isnanf(emx.tvcf.genos[j + offset]) ) {
+	  if ( !std::isnan(emx.tvcf.genos[j + offset]) ) {
 	    if ( mu < 1 ) { // AF < .5
 	      if ( emx.tvcf.genos[j + offset] > DS_THRES ) x(j) = 1.;
 	    }
@@ -885,7 +885,7 @@ int runEmmaxVT(int argc, char** argv) {
 	int mac = 0;
 	mu = emx.tvcf.alleleFreq(i)*2.;
 	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( !isnanf(emx.tvcf.genos[j + offset]) ) {
+	  if ( !std::isnan(emx.tvcf.genos[j + offset]) ) {
 	    if ( mu < 1 ) { // AF < .5
 	      g.push_back(emx.tvcf.genos[j + offset] > DS_THRES ? 1 : 0 );
 	    }
@@ -1528,7 +1528,7 @@ int runVT(int argc, char** argv) {
 	int mac = emx.tvcf.MAC(i);
 	mu = emx.tvcf.alleleFreq(i)*2.;
 	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( !isnanf(emx.tvcf.genos[j + offset]) ) {
+	  if ( !std::isnan(emx.tvcf.genos[j + offset]) ) {
 	    rg.push_back(1+(int)emx.tvcf.genos[j + offset]);
 	    if ( mu < 1 ) { // AF < .5
 	      if ( arg.recessive ) {
@@ -1903,7 +1903,7 @@ int runDump(int argc, char** argv) {
       std::vector<int> cnts(nbins*3,0);
       for(j=0; j < n; ++j) {
 	float g = genos[j+n*i];
-	if ( !isnanf(g) ) {
+	if ( !std::isnan(g) ) {
 	  ++cnts[g + bins[j]*3];
 	  if (g != (( afs[i] < 0.5 ) ? 0. : 2.)) collapse[j] = 1;
 	}
@@ -1951,7 +1951,7 @@ int runDump(int argc, char** argv) {
       }
       for(j=0; j < (int)nPass; ++j) {
 	float g = genos[i + j*n];
-	if ( isnanf(g) ) {
+	if ( std::isnan(g) ) {
 	  wf.printf("\tNA");
 	}
 	else {
@@ -2304,7 +2304,7 @@ int runMultiAssoc(int argc, char** argv) {
 	int offset = i * emx.tvcf.nInds;
 	mu = emx.tvcf.alleleFreq(i)*2.;
 	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( isnanf(emx.tvcf.genos[j + offset]) ) {
+	  if ( std::isnan(emx.tvcf.genos[j + offset]) ) {
 	    x(j) = mu;
 	  }
 	  else {
@@ -2557,7 +2557,7 @@ int runMultiAssocPlain(int argc, char** argv) {
 	int offset = i * emx.tvcf.nInds;
 	mu = emx.tvcf.alleleFreq(i)*2.;
 	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( isnanf(emx.tvcf.genos[j + offset]) ) {
+	  if ( std::isnan(emx.tvcf.genos[j + offset]) ) {
 	    x(j) = 0;
 	  }
 	  else {

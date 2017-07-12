@@ -15,7 +15,7 @@ public:
     };
     void remove(const T& t) {
         if (this->data.find(t) == this->data.end()) {
-            return false;
+            return;
         }
         this->data[t] -- ;
         this->isSorted = false;

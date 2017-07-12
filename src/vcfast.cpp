@@ -1,6 +1,6 @@
 #include "Parameters.h"
 #include "genomeLoci.h"
-#include "genomeScore.h"
+#include "genomeScore.bak.h"
 #include "Error.h"
 #include "fVcf.h"
 #include "wFile.h"
@@ -86,7 +86,7 @@ public:
       genos.resize(vcf.nInds);
       for(int j=0; j < vcf.nInds; ++j) {
 	g = vcf.genos[i * vcf.nInds + j];
-	if ( isnanf(g) ) {
+	if ( std::isnan(g) ) {
 	  genos[j] = ignoreMissing ? '0' : '.';
 	}
 	else {
@@ -206,7 +206,7 @@ void hashBit(fVcf& vcf, unsigned char* bytes, int isnp)  {
   for(int i=0; i < vcf.nInds; ++i) {
     g = vcf.genos[isnp * vcf.nInds + i];
     unsigned char ng = 0x00;
-    if ( ( !isnanf(g) ) && ( g > 0 ) ) {  // missing genotypes are converted to HOMREF
+    if ( ( !std::isnan(g) ) && ( g > 0 ) ) {  // missing genotypes are converted to HOMREF
       ng = (g == 1.) ? 0x01 : 0x02;
     }
     if ( i % 4 == 0 ) bytes[i] = 0;
@@ -311,7 +311,7 @@ int runSummary(int argc, char** argv) {
        frq = (tvcf.sumAlleles[i] == 1) ? 1 : (tvcf.sumAlleles[i] == 2) ? 2 : 0;
        for(j=0; j < n; ++j) {
 	 float v = tvcf.genos[i*n + j];
-	 if ( !isnan(v) ) {
+	 if ( !std::isnan(v) ) {
 	   int g = (v == 0 ? 0 : ( v == 1 ) ? 1 : 2 );
 	   ++cnts[g * 3 + vt + j * 22];
 	   if ( ( frq > 0 ) && ( g > 0 ) ) {
@@ -593,7 +593,7 @@ int runConvert(int argc, char** argv) {
 	      int offset = (m % winR2) * n;
 	      for(j=0; j < n; ++j) {
 		geno = tvcf.genos[j + n*i];
-		if ( isnan(geno) ) {
+		if ( std::isnan(geno) ) {
 		  r2G[offset+j] = 0;
 		}
 		else {
@@ -621,7 +621,7 @@ int runConvert(int argc, char** argv) {
 		//error("--outplink is not implemented yet");
 		for(j=0; j < n; ++j) {
 		  geno = tvcf.genos[j + n*i];
-		  ngeno = isnan(geno) ? 0 : ((int)floor(geno)+1);
+		  ngeno = std::isnan(geno) ? 0 : ((int)floor(geno)+1);
 		  switch(ngeno) {
 		  case 0:
 		    genos[j/4] |=  (0x1 << ((j%4)*2));
@@ -648,7 +648,7 @@ int runConvert(int argc, char** argv) {
 		wf.printf("%s",tvcf.markers[i].c_str());
 		for(j=0; j < n; ++j) {
 		  geno = tvcf.genos[j + n*i];
-		  if ( isnan(geno) ) {
+		  if ( std::isnan(geno) ) {
 		    wf.printf("\tNA");
 		  }
 		  else {
@@ -784,7 +784,7 @@ int runPairLD(int argc, char** argv) {
 	    phased = (gtFlag && (tvcf.phases[j + n*i] > 0) && (!ignorePhase));
 	    if ( phased ) {
  	      geno = tvcf.genos[j + n*i];
- 	      if ( isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
+ 	      if ( std::isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
  	      ngeno = (int)geno;
  	      phase = tvcf.phases[j + n*i];
  	      switch(ngeno) {
@@ -805,7 +805,7 @@ int runPairLD(int argc, char** argv) {
  	    }
 	    else {
 	      geno = tvcf.genos[j + n*i];
-	      if ( isnan(geno) ) {
+	      if ( std::isnan(geno) ) {
 		r2G[offset+j+j] = r2G[offset+j+j+1] = 0;
 	      }
 	      else {
@@ -821,7 +821,7 @@ int runPairLD(int argc, char** argv) {
 // 	    sigma = sqrt(af*(1.-af));
 // 	    for(j=0; j < n; ++j) {
 // 	      geno = tvcf.genos[j + n*i];
-// 	      if ( isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
+// 	      if ( std::isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
 // 	      ngeno = (int)geno;
 // 	      phase = tvcf.phases[j + n*i];
 // 	      switch(ngeno) {
@@ -845,7 +845,7 @@ int runPairLD(int argc, char** argv) {
 // 	    sigma = tvcf.alleleSD(i,true);
 //       	    for(j=0; j < n; ++j) {
 // 	      geno = tvcf.genos[j + n*i];
-// 	      if ( isnan(geno) ) {
+// 	      if ( std::isnan(geno) ) {
 // 		r2G[offset+j] = 0;
 // 	      }
 // 	      else {
@@ -970,7 +970,7 @@ int runIndexLD(int argc, char** argv) {
     geno = tvcf.genos[j];
     phased = (( tvcf.phases[j] > 0 ) && ( !ignorePhase ));
     if ( phased ) {
-      if ( isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
+      if ( std::isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
       ngeno = (int)geno;
       phase = tvcf.phases[j];
       switch(ngeno) {
@@ -993,7 +993,7 @@ int runIndexLD(int argc, char** argv) {
     else {
       for(j=0; j < n; ++j) {
 	geno = tvcf.genos[j];
-	if ( isnan(geno) ) { iG[j+j] = iG[j+j+1] = 0; }
+	if ( std::isnan(geno) ) { iG[j+j] = iG[j+j+1] = 0; }
 	else { iG[j+j] = iG[j+j+1] = (geno-mu)/sigmaA; }
       }
     }
@@ -1040,7 +1040,7 @@ int runIndexLD(int argc, char** argv) {
 	  geno = tvcf.genos[j + n*i];
 	  phased = (( tvcf.phases[j + n*i] > 0 ) && ( !ignorePhase ));
 	  if ( phased ) { // assume phased, non-missing genotypes
-	    if ( isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
+	    if ( std::isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
 	    ngeno = (int)geno;
 	    phase = tvcf.phases[j + n*i];
 	    switch(ngeno) {
@@ -1061,7 +1061,7 @@ int runIndexLD(int argc, char** argv) {
 	  }
 	  else {
 	    geno = tvcf.genos[j + n*i];
-	    if ( isnan(geno) ) {
+	    if ( std::isnan(geno) ) {
 	      tG[j+j] = tG[j+j+1] = 0;
 	    }
 	    else {

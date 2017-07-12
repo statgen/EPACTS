@@ -12,7 +12,7 @@
 #include "pFile.h"
 #include "wFile.h"
 #include "Error.h"
-#include "genomeScore.h"
+#include "genomeScore.bak.h"
 
 #define MAGIC_KIN "EMMA_KIN"
 #define MAGIC_EIG "EMMA_EIG"
