@@ -14,6 +14,7 @@ my $win = 1000000;
 my $out = "";
 my $ucsc = "";
 my $maxp = 1e-3;
+my $ref = "";
 
 ## distributions we're interested in
 my $maxGenes = 100000;
@@ -46,13 +47,21 @@ wGetOptions(
 	    ],
     "max-pvalue=f",[\$maxp,
 		    "maximum p-value",
-		    ],
+    ],
+    "ref=s",[\$ref,
+	     "Reference FASTA file",
+	     "Reference FASTA file with index (.fai). Default is GRCh37 reference sequence (but you may need to run B<epacts download> first if you do not have local copy)",
+	     ],     
     ) || wpod2usage(2);
 
 unless ( ( $bed ) && ( $prefix ) ) {
     print STDERR "ERROR: Missing required option\n";
     wpod2usage(2);
 }
+
+&initRef($ref);
+
+die "ERROR: Cannot find FASTA reference file $ref or $ref.fai. Please specify the correct FASTA file with --ref option\n" unless ( -s "$ref.fai" );
 
 $prefix =~ s/\.epacts.gz$//;
 $out = "$prefix.epacts.ciseqtl.gz" unless ( $out );

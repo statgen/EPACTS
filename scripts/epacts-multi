@@ -6,7 +6,7 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs parsePheno readPedVcf readPedVcfMulti $binR $binRscript $binrm $binmake $binawk $defaultfasta installPackages %ichrs forkExecWait getMosixCmd);
+use epacts qw(@chrs @szchrs parsePheno readPedVcf readPedVcfMulti $binR $binRscript $binrm $binmake $binawk $defaultfasta installPackages %ichrs forkExecWait getMosixCmd initRef intervalsByUnit intervalsByBED);
 
 my $vcf = "";
 my @phenos = ();
@@ -38,8 +38,10 @@ my $restart = "";
 my $ref = "";
 my @condsnps = ();
 my $callregion = "";
+my $intervalList = "";
 my $maxP = 1;
 my $compact = "";
+my $ref = "";
 
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
@@ -78,7 +80,11 @@ wGetOptions(
     "field=s",[\$field,
 	       "VCF's FORMAT field of genotypes or dosages",
 	       "VCF's FORMAT field entry to extract the genotype or dosage information. By default, 'GT' is used. If 'PL' or 'GL' field is specified, the genotype likelihoods will be converted into genotype dosages whenever needed",
-	       ],
+    ],
+    "interval-list=s",[\$intervalList,
+		       "List of intervals as a unit to perform association in standard BED format",
+		       "List of intervals as a unit to perform association in standard BED format (0-based-inclusive-start, 0-based-exclusive-end)",
+    ],      
     "unit=i",[\$unit,
 	      "Size of region in base pair for each parallelized run",
 	      "Size of region in base pair to run as a unit of parallelization. Default value is 1Mb",
@@ -118,7 +124,11 @@ wGetOptions(
     "anno",[\$anno,
 	    "Annotate each variant in the output",
 	    "Annotate each variant in the output. The marker ID will be formatted in [CHR]:[POS]_[REF]/[ALT]_[FUNC]:[GENE]",
-	    ],
+    ],
+    "ref=s",[\$ref,
+	     "Reference FASTA file",
+	     "Reference FASTA file with index (.fai). Default is GRCh37 reference sequence (but you may need to run B<epacts download> first if you do not have local copy)",
+	     ],    
     "inv-norm",[\$invNorm,
 		"Inverse-normal transformation of phenotypes",
 		"Perform inverse normal transformation (quantile normalization) of phenotypes before running association",
@@ -178,6 +188,10 @@ unless ( ( $vcf ) && ( $test ) && ( $ped ) && ( $kinf || ( $test ne "q.emmax" ) 
     wpod2usage(2);
 }
 
+&initRef($ref);
+
+die "ERROR: Cannot find FASTA reference file $ref or $ref.fai. Please specify the correct FASTA file with --ref option\n" unless ( -s "$ref.fai" );
+
 if ( $callregion ) {
     die "--chr and --region cannot be used together\n" if ( $chr );
     ($chr,$bprange) = split(/:/,$callregion);
@@ -234,7 +248,7 @@ die "ERROR: Cannot open $vcf.tbi. The VCF file must be tabixed\n" unless ( -s "$
 
 #die "ERROR in installing R packages\n" if ( ! &installPackages() );
 
-my ($rVcfIds,$rhPhes,$rhCovs,$rPnames) = &readPedVcfMulti($epactsdir,$ped,$vcf,$missing,\@phenos,\@covs,\@condsnps);
+my ($rVcfIds,$rhPhes,$rhCovs,$rPnames) = &readPedVcfMulti($epactsdir,$ped,$vcf,$missing,\@phenos,\@covs,\@condsnps,$field);
 my @vcfIds = @{$rVcfIds};
 my %hPhes = %{$rhPhes};
 my %hCovs = %{$rhCovs};
@@ -301,6 +315,16 @@ if ( ( ! $sepchr ) && ( $vcf =~ /chr/ ) && ( ! $chr ) ) {
     print STDERR "*************************************************************************************\n";
 }
 
+my $rIntervals;
+if ( $intervalList ) {
+    $rIntervals = &intervalsByBED($intervalList,\@chrs,\@szchrs,$chr,$bprange);
+}
+else {
+    $rIntervals = &intervalsByUnit($unit,\@chrs,\@szchrs,undef,$chr,$bprange);
+}
+
+die "ERROR: Interval size mismatch\n" unless ( $#{$rIntervals} == $#chrs );
+
 open(MAK,">$out.Makefile") || die "Cannot open file $out.Makefile for writing\n";
 print MAK ".DELETE_ON_ERROR:\n\n";
 if ( $test eq "q.emmax" ) {  ## Need to generate kinship matrix and REML first
@@ -310,43 +334,44 @@ if ( $test eq "q.emmax" ) {  ## Need to generate kinship matrix and REML first
     my @cmds = ();
 
     for(my $i=0; $i < @chrs; ++$i) {
-	if ( ( $chr eq "" ) || ( $chrs[$i] eq $chr ) ) {
-	    my $szchr = $szchrs[$i];
-	    print STDERR "Kinship : Processing chromosome $chrs[$i]...\n";
-	    my $cvcf = $vcf;
-	    if ( $sepchr ) {
-		die "ERROR: with --sepchr option, $vcf must contain chr1" unless ( $vcf =~ /chr1/ );
-		$cvcf =~ s/chr1/chr$chrs[$i]/g;
-		unless ( -s $cvcf ) {
-		    print STDERR "WARNING: $cvcf does not exist. Skipping..\n";
-		    next;
-		}
-	    }
+	my @chrIntervals = @{$rIntervals->[$i]};
+	next if ( $#chrIntervals < 0 );	
 
-	    for(my $j=1; $j < $szchr; $j += $unit) {
-		my ($start,$end) = ($j,$j+$unit-1);
-		$end = $szchr if ( $end > $szchr );
-		
-		if ( $bprange ) {
-		    ($start,$end) = split(/-/,$bprange);
-		}
-		
-		my $op = "$out.$chrs[$i].$start.$end";
-		my $region = "$chrs[$i]:$start-$end";
-		
-		my $tgt = "$op.epacts.gz";
-		my $cmd = "$epactsdir/bin/pEmmax multi-assoc --vcf $cvcf --region $region --field $field --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC --maxP $maxP --tryf $tryf".($compact ? " --compact" : "");
-		if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
-		$cmd = "\t$cmd\n";
-		if ( $anno ) {
-		    $cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts.gz --ref $ref\n";
-		}
-		$cmd .= "\t$epactsdir/bin/tabix -f -pbed $tgt\n";
-		push(@tgts,$tgt);
-		push(@cmds,$cmd);
-		
-		last if ( $bprange );
+	my $szchr = $szchrs[$i];
+	print STDERR "Kinship : Processing chromosome $chrs[$i]...\n";
+	my $cvcf = $vcf;
+	if ( $sepchr ) {
+	    die "ERROR: with --sepchr option, $vcf must contain chr1" unless ( $vcf =~ /chr1/ );
+	    if ( $chrs[0] =~ /^chr/ ) {
+		$cvcf =~ s/chr1/$chrs[$i]/g;		
 	    }
+	    else {
+		$cvcf =~ s/chr1/chr$chrs[$i]/g;
+	    }		
+	    unless ( -s $cvcf ) {
+		print STDERR "WARNING: $cvcf does not exist. Skipping..\n";
+		next;
+	    }
+	}
+
+	for(my $j=0; $j < @chrIntervals; ++$j) {
+	    my ($start,$end) = @{$chrIntervals[$j]};	
+		
+	    my $op = "$out.$chrs[$i].$start.$end";
+	    my $region = "$chrs[$i]:$start-$end";
+		
+	    my $tgt = "$op.epacts.gz";
+	    my $cmd = "$epactsdir/bin/pEmmax multi-assoc --vcf $cvcf --region $region --field $field --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC --maxP $maxP --tryf $tryf".($compact ? " --compact" : "");
+	    if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+	    $cmd = "\t$cmd\n";
+	    if ( $anno ) {
+		$cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts.gz --ref $ref\n";
+	    }
+	    $cmd .= "\t$epactsdir/bin/tabix -f -pbed $tgt\n";
+	    push(@tgts,$tgt);
+	    push(@cmds,$cmd);
+	    
+	    #last if ( $bprange );
 	}
     }
 
@@ -397,53 +422,55 @@ else {
     my @tgts = ();
     my @cmds = ();
     for(my $i=0; $i < @chrs; ++$i) {
-	if ( ( $chr eq "" ) || ( $chrs[$i] eq $chr ) ) {
-	    my $szchr = $szchrs[$i];
-	    print STDERR "Processing chromosome $chrs[$i]...\n";
-	    my $cvcf = $vcf;
-	    if ( $sepchr ) {
-		die "ERROR: with --sepchr option, $vcf must contain chr1" unless ( $vcf =~ /chr1/ );
+
+	my @chrIntervals = @{$rIntervals->[$i]};
+	next if ( $#chrIntervals < 0 );
+	
+	my $szchr = $szchrs[$i];
+	print STDERR "Processing chromosome $chrs[$i]...\n";
+	my $cvcf = $vcf;
+	if ( $sepchr ) {
+	    die "ERROR: with --sepchr option, $vcf must contain chr1" unless ( $vcf =~ /chr1/ );
+	    if ( $chrs[0] =~ /^chr/ ) {
+		$cvcf =~ s/chr1/$chrs[$i]/g;		
+	    }
+	    else {
 		$cvcf =~ s/chr1/chr$chrs[$i]/g;
-		unless ( -s $cvcf ) {
-		    print STDERR "WARNING: $cvcf does not exist. Skipping..\n";
-		    next;
+	    }	    	    
+	    unless ( -s $cvcf ) {
+		print STDERR "WARNING: $cvcf does not exist. Skipping..\n";
+		next;
 		}
-	    }
+	}
+
+	for(my $j=0; $j < @chrIntervals; ++$j) {
+	    my ($start,$end) = @{$chrIntervals[$j]};	    
+
+	    my $op = "$out.$chrs[$i].$start.$end";
+	    my $region = "$chrs[$i]:$start-$end";
 	    
-	    for(my $j=1; $j < $szchr; $j += $unit) {
-		my ($start,$end) = ($j,$j+$unit-1);
-		$end = $szchr if ( $end > $szchr );
-
-		if ( $bprange ) {
-		    ($start,$end) = split(/-/,$bprange);
-		}
-
-		my $op = "$out.$chrs[$i].$start.$end";
-		my $region = "$chrs[$i]:$start-$end";
+	    my $tgt = "$op.epacts.gz";
+	    my $cmd = "$epactsdir/bin/pEmmax multi-assoc-plain --vcf $cvcf --region $region --field $field --indf $ind --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC --maxP $maxP --pheno $out.phe".($compact ? " --compact" : "");
 		
-		my $tgt = "$op.epacts.gz";
-		my $cmd = "$epactsdir/bin/pEmmax multi-assoc-plain --vcf $cvcf --region $region --field $field --indf $ind --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC --maxP $maxP --pheno $out.phe".($compact ? " --compact" : "");
-		
-		#die "ERROR: Cannot find $datadir/multi.$test.R\n" unless ( -s "$datadir/multi.$test.R" );
+	    #die "ERROR: Cannot find $datadir/multi.$test.R\n" unless ( -s "$datadir/multi.$test.R" );
 
-		#$cmd = "$binRscript $datadir/epactsMulti.R --vanilla $epactsdir $pheno $cov $ind $cvcf $region $op.epacts $field $minMAF $maxMAF $minMAC $maxMAC $minCallRate $minRSQ ".(($pass) ? "TRUE" : "FALSE")." multi.$test; gzip $op.epacts";
-		if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
-		$cmd = "\t$cmd\n";
-
-		if ( $anno ) {
-		    if ( $mosixNodes ) { 
-			$cmd .= "\t".&getMosixCmd("$epactsdir/bin/epacts-anno --ref $ref --in $op.epacts.gz",$mosixNodes)."\n";
-		    }
-		    else {
-			$cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts.gz --ref $ref\n";
-		    }
+	    #$cmd = "$binRscript $datadir/epactsMulti.R --vanilla $epactsdir $pheno $cov $ind $cvcf $region $op.epacts $field $minMAF $maxMAF $minMAC $maxMAC $minCallRate $minRSQ ".(($pass) ? "TRUE" : "FALSE")." multi.$test; gzip $op.epacts";
+	    if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+	    $cmd = "\t$cmd\n";
+	    
+	    if ( $anno ) {
+		if ( $mosixNodes ) { 
+		    $cmd .= "\t".&getMosixCmd("$epactsdir/bin/epacts-anno --ref $ref --in $op.epacts.gz",$mosixNodes)."\n";
 		}
-		$cmd .= "\t$epactsdir/bin/tabix -f -pbed $tgt\n";
-		push(@tgts,$tgt);
-		push(@cmds,$cmd);
-
-		last if ( $bprange );
+		else {
+		    $cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts.gz --ref $ref\n";
+		}
 	    }
+	    $cmd .= "\t$epactsdir/bin/tabix -f -pbed $tgt\n";
+	    push(@tgts,$tgt);
+	    push(@cmds,$cmd);
+	    
+	    #last if ( $bprange );
 	}
     }
 

@@ -6,7 +6,7 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs parsePheno readPedVcf $binR $binRscript $binrm $binmake installPackages forkExecWait getMosixCmd);
+use epacts qw(@chrs @szchrs parsePheno readPedVcf $binR $binRscript $binrm $binmake installPackages forkExecWait getMosixCmd initRef);
 
 my $vcf = "";
 my $pheno = "";
@@ -41,6 +41,7 @@ my $restart;
 my $binaryFlag = 0;
 my $vntFlag = 0;
 my @condsnps = ();
+my $ref = "";
 
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
@@ -66,7 +67,7 @@ wGetOptions(
     "groupf=s",[\$groupf,
 		"EPACTS marker group file",
 		"EPACTS marker group file that defines the groups of markers to be tested for EPACTS groupwise association. See B<epacts make-group> for details on how to produce the marker group file",
-		],
+    ],    
     "--Key Options",
     "pheno=s",[\$pheno,
 	       "Name of phenotype column from PED file",
@@ -148,7 +149,10 @@ wGetOptions(
     "remlf=s",[\$remlf,
 	      "REML file produced by other run of q.emmax",
 	      "REML file produced by other run of EMMAX (either single SNP or groupwise associations)",
-	       ],
+    ],
+    "ref=s",[\$ref,
+	     "Reference FASTA file",
+	     "Reference FASTA file with index (.fai). Default is GRCh37 reference sequence (but you may need to run B<epacts download> first if you do not have local copy)",    
     "--Options specific to SKAT (skat) test",
     "skat-o",[\$skatOptimal,
 	      "Run SKAT in optimal mode",

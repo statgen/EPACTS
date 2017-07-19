@@ -306,10 +306,10 @@ SORT_CHECK = yes
 STRIP = strip
 VERSION = 3.3.0
 ZCAT_CHECK = yes
-abs_builddir = /net/wonderland/home/dtaliun/Programming/Git/EPACTS/src
-abs_srcdir = /net/wonderland/home/dtaliun/Programming/Git/EPACTS/src
-abs_top_builddir = /net/wonderland/home/dtaliun/Programming/Git/EPACTS
-abs_top_srcdir = /net/wonderland/home/dtaliun/Programming/Git/EPACTS
+abs_builddir = /home/hmkang/code/working/EPACTS.develop/src
+abs_srcdir = /home/hmkang/code/working/EPACTS.develop/src
+abs_top_builddir = /home/hmkang/code/working/EPACTS.develop
+abs_top_srcdir = /home/hmkang/code/working/EPACTS.develop
 ac_ct_AR = ar
 ac_ct_CC = gcc
 ac_ct_CXX = g++
@@ -339,7 +339,7 @@ host_vendor = unknown
 htmldir = ${docdir}
 includedir = ${prefix}/include
 infodir = ${datarootdir}/info
-install_sh = ${SHELL} /net/wonderland/home/dtaliun/Programming/Git/EPACTS/install-sh
+install_sh = ${SHELL} /home/hmkang/code/working/EPACTS.develop/install-sh
 libdir = ${exec_prefix}/lib
 libexecdir = ${exec_prefix}/libexec
 localedir = ${datarootdir}/locale
@@ -348,7 +348,7 @@ mandir = ${datarootdir}/man
 mkdir_p = $(MKDIR_P)
 oldincludedir = /usr/include
 pdfdir = ${docdir}
-prefix = /net/wonderland/home/dtaliun/EPACTS_local
+prefix = /net/fantasia/home/hmkang/tools/epacts.develop
 program_transform_name = s,x,x,
 psdir = ${docdir}
 sbindir = ${exec_prefix}/sbin
@@ -610,9 +610,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign src/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --gnu src/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign src/Makefile
+	  $(AUTOMAKE) --gnu src/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \

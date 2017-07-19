@@ -6,7 +6,7 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs parsePheno readPedVcf $binR $binRscript $binrm $binmake $binawk $defaultfasta installPackages %ichrs forkExecWait getMosixCmd);
+use epacts qw(@chrs @szchrs parsePheno readPedVcf $binR $binRscript $binrm $binmake $binawk $defaultfasta installPackages %ichrs forkExecWait getMosixCmd initRef intervalsByUnit intervalsByBED);
 
 my $vcf = "";
 my $pheno = "";
@@ -40,6 +40,7 @@ my $ref = "";
 my $topzoom = 0;
 my @condsnps = ();
 my $callregion = "";
+my $intervalList = "";
 
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
@@ -78,7 +79,11 @@ wGetOptions(
     "field=s",[\$field,
 	       "VCF's FORMAT field of genotypes or dosages",
 	       "VCF's FORMAT field entry to extract the genotype or dosage information. By default, 'GT' is used. If 'PL' or 'GL' field is specified, the genotype likelihoods will be converted into genotype dosages whenever needed",
-	       ],
+    ],
+    "interval-list=s",[\$intervalList,
+		       "List of intervals as a unit to perform association in standard BED format",
+		       "List of intervals as a unit to perform association in standard BED format (0-based-inclusive-start, 0-based-exclusive-end)",
+    ],  
     "unit=i",[\$unit,
 	      "Size of region in base pair for each parallelized run",
 	      "Size of region in base pair to run as a unit of parallelization. Default value is 1Mb",
@@ -145,8 +150,8 @@ wGetOptions(
 		 "Minimum RSQ_HAT value (as a surrogate of imputatio quality) threshold for including in the single variant association test",
 		 ],
     "ref=s",[\$ref,
-	     "Reference FASTA file for --anno option",
-	     "Reference FASTA file with index (.fai). Required for --anno option. Default is GRCh37 reference sequence (but you may need to run B<epacts download> first if you do not have local copy)",
+	     "Reference FASTA file",
+	     "Reference FASTA file with index (.fai). Default is GRCh37 reference sequence (but you may need to run B<epacts download> first if you do not have local copy)",
 	     ],
     "region=s",[\$callregion,
 		"Subset of genomic regions to run association",
@@ -179,6 +184,10 @@ unless ( ( $vcf ) && ( $test ) && ( $ped ) && ( $out ) ) {
     wpod2usage(2);
 }
 
+&initRef($ref);
+
+die "ERROR: Cannot find FASTA reference file $ref or $ref.fai. Please specify the correct FASTA file with --ref option\n" unless ( -s "$ref.fai" );
+
 if ( $callregion ) {
     die "--chr and --region cannot be used together\n" if ( $chr );
     ($chr,$bprange) = split(/:/,$callregion);
@@ -201,9 +210,9 @@ $remlf = "$dir/$remlf" unless ( $remlf eq "" || $remlf =~ /^\// );
 my $eigf = "";
 my $remlFlag = 1;
 
-$ref = $defaultfasta if ( $ref eq "" );
+#$ref = $defaultfasta if ( $ref eq "" );
 
-die "ERROR: Cannot find FASTA reference file $ref or $ref.fai. Please specify the correct FASTA file or turn off the --anno option\n" if ( ($anno) && (! ( ( -s $ref ) && ( -s "$ref.fai" ) ) ) );
+#die "ERROR: Cannot find FASTA reference file $ref or $ref.fai. Please specify the correct FASTA file or turn off the --anno option\n" if ( ($anno) && (! ( ( -s $ref ) && ( -s "$ref.fai" ) ) ) );
 
 if ( $remlf ) {
     die "Cannot open $remlf for reading" unless ( -s $remlf );
@@ -309,61 +318,72 @@ print MAK ".DELETE_ON_ERROR:\n\n";
 my @tgts = ();
 my @cmds = ();
 
+my $rIntervals;
+if ( $intervalList ) {
+    $rIntervals = &intervalsByBED($intervalList,\@chrs,\@szchrs,$chr,$bprange);
+}
+else {
+    $rIntervals = &intervalsByUnit($unit,\@chrs,\@szchrs,undef,$chr,$bprange);
+}
+
+die "ERROR: Interval size mismatch\n" unless ( $#{$rIntervals} == $#chrs );
+
 for(my $i=0; $i < @chrs; ++$i) {
-    if ( ( $chr eq "" ) || ( $chrs[$i] eq $chr ) ) {
-	my $szchr = $szchrs[$i];
-	print STDERR "Processing chromosome $chrs[$i]...\n";
-	my $cvcf = $vcf;
-	if ( $sepchr ) {
-	    die "ERROR: with --sepchr option, $vcf must contain chr1" unless ( $vcf =~ /chr1/ );
+    my @chrIntervals = @{$rIntervals->[$i]};
+    next if ( $#chrIntervals < 0 );
+    
+    my $szchr = $szchrs[$i];
+    print STDERR "Processing chromosome $chrs[$i]...\n";
+    my $cvcf = $vcf;
+    if ( $sepchr ) {
+	die "ERROR: with --sepchr option, $vcf must contain chr1" unless ( $vcf =~ /chr1/ );
+	if ( $chrs[0] =~ /^chr/ ) {
+	    $cvcf =~ s/chr1/$chrs[$i]/g;		
+	}
+	else {
 	    $cvcf =~ s/chr1/chr$chrs[$i]/g;
-	    unless ( -s $cvcf ) {
-		print STDERR "WARNING: $cvcf does not exist. Skipping..\n";
-		next;
+	}	    
+	unless ( -s $cvcf ) {
+	    print STDERR "WARNING: $cvcf does not exist. Skipping..\n";
+	    next;
+	}
+    }
+
+    for(my $j=0; $j < @chrIntervals; ++$j) {
+	my ($start,$end) = @{$chrIntervals[$j]};
+	
+	my $op = "$out.$chrs[$i].$start.$end";
+	my $region = "$chrs[$i]:$start-$end";
+	    
+	my $tgt = "$op.epacts";
+	
+	my $cmd;
+	if ( $test eq "b.glrt" ) {
+	    $field = "PL" if ( $field eq "GT" );
+	    $cmd = "$epactsdir/bin/pEmmax GLRT --vcf $cvcf --phenof $pheno --indf $ind --region $region --out $op.epacts --field $field --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC ".($pass ? "" : "--ignoreFilter");
+	}
+	elsif ( $test eq "q.emmax" ) {
+	    $cmd = "$epactsdir/bin/pEmmax assoc --vcf $cvcf --region $region --phenof $pheno --field $field --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC";
+	}
+	else {
+	    die "ERROR: Cannot find $datadir/single.$test.R\n" unless ( -s "$datadir/single.$test.R" );
+	    
+	    $cmd = "$binRscript $datadir/epactsSingle.R --vanilla $epactsdir $pheno $cov $ind $cvcf $region $op.epacts $field $minMAF $maxMAF $minMAC $maxMAC $minCallRate $minRSQ ".(($pass) ? "TRUE" : "FALSE")." single.$test";
+	    if ( $emmaxRFlag ) {
+		die "Cannot find $eigf or $remlf\n" unless ( ( $eigf ) && ( $remlf ) );
+		$cmd .= " $eigf $remlf";
 	    }
 	}
 	
-	for(my $j=1; $j < $szchr; $j += $unit) {
-	    my ($start,$end) = ($j,$j+$unit-1);
-	    $end = $szchr if ( $end > $szchr );
-	    
-	    if ( $bprange ) {
-		($start,$end) = split(/-/,$bprange);
-	    }
-	    
-	    my $op = "$out.$chrs[$i].$start.$end";
-	    my $region = "$chrs[$i]:$start-$end";
-	    
-	    my $tgt = "$op.epacts";
-
-	    my $cmd;
-	    if ( $test eq "b.glrt" ) {
-		$field = "PL" if ( $field eq "GT" );
-		$cmd = "$epactsdir/bin/pEmmax GLRT --vcf $cvcf --phenof $pheno --indf $ind --region $region --out $op.epacts --field $field --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC ".($pass ? "" : "--ignoreFilter");
-	    }
-	    elsif ( $test eq "q.emmax" ) {
-		$cmd = "$epactsdir/bin/pEmmax assoc --vcf $cvcf --region $region --phenof $pheno --field $field --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC";
-	    }
-	    else {
-		die "ERROR: Cannot find $datadir/single.$test.R\n" unless ( -s "$datadir/single.$test.R" );
-		
-		$cmd = "$binRscript $datadir/epactsSingle.R --vanilla $epactsdir $pheno $cov $ind $cvcf $region $op.epacts $field $minMAF $maxMAF $minMAC $maxMAC $minCallRate $minRSQ ".(($pass) ? "TRUE" : "FALSE")." single.$test";
-		if ( $emmaxRFlag ) {
-		    die "Cannot find $eigf or $remlf\n" unless ( ( $eigf ) && ( $remlf ) );
-		    $cmd .= " $eigf $remlf";
-		}
-	    }
-
-	    if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
-	    $cmd = "\t$cmd\n";
-	    if ( $anno ) {
-		$cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts --ref $ref\n";
-	    }
-	    push(@tgts,$tgt);
-	    push(@cmds,$cmd);
-	    
-	    last if ( $bprange );
+	if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+	$cmd = "\t$cmd\n";
+	if ( $anno ) {
+	    $cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts --ref $ref\n";
 	}
+	push(@tgts,$tgt);
+	push(@cmds,$cmd);
+	
+	#last if ( $bprange );
     }
 }
 
