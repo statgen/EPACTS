@@ -1,44 +1,58 @@
 package epacts;
 
+use strict;
 use base qw/Exporter/;
 use lib "$FindBin::Bin";
 use File::Basename;
 
 ## Variables and methods shared across the package
-@EXPORT_OK = qw(@chrs @szchrs @cumszchrsMb parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrs readPedVcf readPedVcfMulti readPedKinLabel $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binawk $binpfbtops $bingnuplot $binepstopdf $binsort $defaultfasta installPackages tofpos fromfpos forkExecWait);
+our @EXPORT = qw(%hszchrs @chrs @szchrs @cumszchrsMb %ichrs);
+our @EXPORT_OK = qw(parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex readPedVcf readPedVcfMulti readPedKinLabel $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binawk $binpfbtops $bingnuplot $binepstopdf $binsort $defaultfasta $xLabel $yLabel $xStart $xStop installPackages tofpos fromfpos forkExecWait initRef intervalsByUnit intervalsByBED readBED);
 
-$epactsdir = dirname($FindBin::Bin);
-$datadir = "$epactsdir/share/EPACTS";
-$defaultfasta = "$datadir/human_g1k_v37.fasta";
+our $epactsdir = dirname($FindBin::Bin);
+our $datadir = "$epactsdir/share/EPACTS";
+our $defaultfasta = "$datadir/human_g1k_v37.fasta";
 
-$binR = "R";
-$binRscript = "Rscript"; #$binRscript = "R CMD BATCH --slave --no-save --no-restore";
-$binrm = "rm";
-$binmake = "make";
-$binzcat = "zcat";
-$bincat = "cat";
-$binhead = "head";
-$binmv = "mv";
-$bincut = "cut";
-$bingrep = "grep";
-$binawk = "awk";
-$binsort = "sort";
-$binpfbtops = "pfbtops";
-$bingnuplot = "gnuplot";
-$binepstopdf = "$epactsdir/bin/epstopdf";
+our $binR = "R";
+our $binRscript = "Rscript"; #$binRscript = "R CMD BATCH --slave --no-save --no-restore";
+our $binrm = "rm";
+our $binmake = "make";
+our $binzcat = "zcat";
+our $bincat = "cat";
+our $binhead = "head";
+our $binmv = "mv";
+our $bincut = "cut";
+our $bingrep = "grep";
+our $binawk = "awk";
+our $binsort = "sort";
+our $binpfbtops = "pfbtops";
+our $bingnuplot = "gnuplot";
+our $binepstopdf = "$epactsdir/bin/epstopdf";
+our $xLabel = "X";
+our $yLabel = "Y";
+our $mtLabel = "MT";
+our $xStart = 2699520;
+our $xStop = 154931044;
 
-BEGIN {
+our %hszchrs = ();
+our @chrs   = ();
+our @szchrs = ();
+our @cumszchrsMb = ();
+our %ichrs   = ();
+#my  %hchrs   = ();
+
+#BEGIN {
 ## Variables below are hard-coded based on GRCh37
-    @chrs = (1..22,"X","Y","MT");
-    @szchrs = qw(249250621 243199373 198022430 191154276 180915260 171115067 159138663 146364022 141213431 135534747 135006516 133851895 115169878 107349540 102531392 90354753 81195210 78077248 59128983 63025520 48129895 51304566 155270560 59373566 16569);
-    %ichrs = ();
-    
-    @cumszchrsMb = (0);
-    for(my $i=0; $i < @chrs; ++$i) {
-	push(@cumszchrsMb,$szchrs[$i]/1e6+$cumszchrsMb[$i]);
-	$ichrs{$chrs[$i]} = $i;
-    }
-}
+#    @chrs = (1..22,"X","Y","MT");
+#    @szchrs = qw(249250621 243199373 198022430 191154276 180915260 171115067 159138663 146364022 141213431 135534747 135006516 133851895 115169878 107349540 102531392 90354753 81195210 78077248 59128983 63025520 48129895 51304566 155270560 59373566 16569);
+#    %ichrs = ();
+#    
+#    @cumszchrsMb = (0);
+#    for(my $i=0; $i < @chrs; ++$i) {
+#	push(@cumszchrsMb,$szchrs[$i]/1e6+$cumszchrsMb[$i]);
+#	$ichrs{$chrs[$i]} = $i;
+#    }
+#}
 
 ## parse phenotype value, resolving missing values
 sub parsePheno {
@@ -150,11 +164,14 @@ sub readPedVcf {
     
     if ( $#datIds < 0 ) {  ## NO HEADER available
 	$iphe = 5;
-	if ( $allcov ) {
-	    my @F = split(/[\s\t\r\n]+/,`$binhead -1 $ped`);
-	    for(my $i=6; $i < @F; ++$i) {
-		push(@icovs,$i);
-	    }
+	#if ( $allcov ) {
+	#    my @F = split(/[\s\t\r\n]+/,`$binhead -1 $ped`);
+	#    for(my $i=6; $i < @F; ++$i) {
+	#	push(@icovs,$i);
+	#    }
+	#}
+	if ( $#covs >= 0 ) {
+	    die "FATAL ERROR: Cannot find $covs[0] in $ped";	    
 	}
     }
     else {  ## HEADER is available
@@ -171,18 +188,18 @@ sub readPedVcf {
 	    $iphe = 5;
 	}
 	
-	if ( $allcov ) {
-	    for(my $i=5; $i < @datIds; ++$i) {
-		push(@icovs,$i) unless ( $i == $iphe );
-	    }
-	}
-	else {
+	#if ( $allcov ) {
+	#    for(my $i=5; $i < @datIds; ++$i) {
+	#	push(@icovs,$i) unless ( $i == $iphe );
+	#    }
+	#}
+	#else {
 	    for(my $i=0; $i < @covs; ++$i) {
 		my $icov = $hcols{$covs[$i]};
 		die "FATAL ERROR: Cannot find $covs[$i] in $ped" unless defined($iphe);
 		push(@icovs,$icov);
 	    }
-	}
+	#}
     }
 
     ## Parse VCF and put condition SNP info
@@ -378,7 +395,7 @@ sub forkExecWait {
 }
 
 sub readPedVcfMulti {
-    my ($epactsdir,$ped,$vcf,$missing,$rphes,$rcovs,$rcondsnps) = @_;
+    my ($epactsdir,$ped,$vcf,$missing,$rphes,$rcovs,$rcondsnps,$field) = @_;
     $rphes = [] unless ( defined($rphes) );
     $rcovs = [] unless ( defined($rcovs) );
     $rcondsnps = [] unless ( defined($rcondsnps) );
@@ -429,7 +446,7 @@ sub readPedVcfMulti {
     my %hcols = ();
     for(my $i=0; $i < @datIds; ++$i) {
 	$hcols{$datIds[$i]} = $i;
-	$hicols{$i} = 1;
+	#$hicols{$i} = 1;
     }
 
     my %hisels = ();
@@ -455,7 +472,7 @@ sub readPedVcfMulti {
 	    my $iphe = $hcols{$phes[$i]};
 	    die "FATAL ERROR: Cannot find $phes[$i] in $ped" unless defined($iphe);
 
-	    if ( defined($hsels{$iphe}) ) {
+	    if ( defined($hisels{$iphe}) ) {
 		die "FATAL ERROR: phenotype $phes[$i] is also included in the covariates\n";
 	    }
 	    else {
@@ -510,7 +527,7 @@ sub readPedVcfMulti {
 	    my @c = ();
 	    for(my $j=0; $j < @icovs; ++$j) {
 		push(@c,&parsePheno($F[$icovs[$j]],$missing));
-		die "ERROR: Missing covariate value is detected in individual $id, covariate $covs->[$j]. Currently EPACTS won't run correctly with missing covariates\n" if ( $c[$#c] eq $missing );
+		die "ERROR: Missing covariate value is detected in individual $id, covariate $rcovs->[$j]. Currently EPACTS won't run correctly with missing covariates\n" if ( $c[$#c] eq $missing );
 	    }
 	    my $ivcf = $hVcfIds{$id};
 	    for(my $j=0; $j < @vcfCondGenos; ++$j) {
@@ -555,6 +572,80 @@ sub vcfExtractMarkerGenotypes {
     }
 }
 
+sub initRef {
+    my $ref = shift;
+
+    unless ( %hszchrs ) {
+	$ref = $defaultfasta unless ( ( defined($ref) ) && ( $ref ) );
+	open(IN,"$ref.fai") || die "Cannot open file $ref.fai\n";
+	my $cumbase = 0;
+
+	my @autoChrs = ();
+	my $chrPrefix = -1;
+	## %hszchrs contains mapping between all chromosomes and the line
+	for(my $nchr=0; <IN>; ++$nchr) {
+	    my ($chrom,$base,$startbyte,$basesperline,$bytesperline) = split;
+	    $hszchrs{$chrom} = [$startbyte,$basesperline,$bytesperline,$base,$nchr,$cumbase,$cumbase+$base];
+	    $cumbase += $base;	    	    	    
+	    if ( $chrom =~ /^chr(\d+)$/ ) {
+		push(@autoChrs,$1);
+		if ( $chrPrefix == 0 ) {
+		    die "ERROR: Chromosomes with chr prefix and without chr prefix observed in $ref.fai";
+		}
+		elsif ( $chrPrefix == -1 ) {
+		    $chrPrefix = 1;
+		}
+	    }
+	    elsif ( $chrom =~ /^(\d+)$/ ) {
+		push(@autoChrs,$1);
+		if ( $chrPrefix == 1 ) {
+		    die "ERROR: Chromosomes with chr prefix and without chr prefix observed in $ref.fai";
+		}
+		elsif ( $chrPrefix == -1 ) {
+		    $chrPrefix = 0;
+		}		
+	    }
+	    elsif ( ( $chrom eq "X" ) || ( $chrom eq "chrX" ) ) {
+		## Hard-coded start, stop regions
+		$xLabel = $chrom;
+		if ( $base == 155270560 ) {
+		    $xStart = 2699520;
+		    $xStop  = 154931044;
+		}
+		elsif ( $base == 156040895 ) {
+		    $xStart = 2781479;
+		    $xStop  = 15570138;
+		}
+		else {
+		    die "ERROR: The chromosome X size $base is not recognized by neither GRCh37 (hg19) nor GRCh38 (hg38). If you are using other genome builds, modify initRef function in epacts.pm to change PAR region info manually\n";
+		}
+	    }
+	    elsif ( ( $chrom eq "Y" ) || ( $chrom eq "chrY") ) {
+		$yLabel = $chrom;
+	    }
+	    elsif ( ( $chrom eq "MT" ) || ( $chrom eq "chrM" ) || ( $chrom eq "chrMT" ) ) {
+		$mtLabel = $chrom;
+	    }
+	}
+
+	die "Error in parsing FASTA index file $ref.fai\n" if ( ( $chrPrefix < 0 ) || ( ! $xLabel ) || ( ! $yLabel ) || ( ! $mtLabel ) );
+
+	@chrs = ();
+	@szchrs = ();
+	@cumszchrsMb = (0);
+	my @sortedAutoChrs = sort {$a <=> $b} @autoChrs;
+	foreach my $c (@sortedAutoChrs) {
+	    push(@chrs, ($chrPrefix == 1) ? "chr$c" : $c);
+	    push(@szchrs, $hszchrs{$chrs[$#chrs]}->[3]);
+	    my $newcumszMb = $szchrs[$#szchrs]/1e6 + $cumszchrsMb[$#cumszchrsMb];
+	    push(@cumszchrsMb, $newcumszMb);
+	    $ichrs{$chrs[$#chrs]} = $#chrs;
+	}
+	close IN;
+	#@open(FASTA,$ref) || die "Cannot open file $ref\n";
+    }
+}
+
 sub zopen {
     my $fn = shift;
     my $reg = shift;
@@ -581,3 +672,141 @@ sub zopen {
     }
     return $fh;
 }
+
+sub readBED {
+    my $fn = shift;
+    my $fh = zopen($fn);
+    my %hbed = ();
+    while(<$fh>) {
+	my ($chr,$beg0,$end1) = split;
+	die "Invalid BED interval $chr:$beg0-$end1 in $fn\n" if ( $beg0 >= $end1 );
+	if ( defined($hbed{$chr}) ) {
+	    my $r = $hbed{$chr};
+	    my $nr = $#{$r};
+	    die "Unsorted or overlapping BED interval $chr:".join("\t",@{$r->[$nr]})." and $chr:$beg0-$end1\n" if ( $r->[$nr]->[1] > $beg0 );
+	    push(@{$hbed{$chr}},[$beg0,$end1]);
+	}
+	else {
+	    $hbed{$chr} = [ [$beg0,$end1] ];
+	}
+    }
+    return \%hbed;
+}
+
+sub intervalsByBED {
+    my ($bedf,$rchrs,$rszchrs,$chrom,$bprange) = shift;
+    my $rBED = &readBED($bedf);
+    my @intervals = ();    
+    for(my $i=0; $i <= $#{$rchrs}; ++$i) {  ## for each chromosome..
+	my @chrIntervals = ();
+
+	if ( defined($chrom) && ( $chrom ) && ( $rchrs->[$i] ne $chrom ) ) {
+	    push(@intervals,\@chrIntervals);
+	    next;
+	}
+	
+	my $chr = $rchrs->[$i];
+	my $r = $rBED->{$chr};
+	if ( defined($r) ) {
+	    foreach my $i (@{$r}) {
+		my $beg = $i->[0]+1;
+		my $end = $i->[1];
+		
+		## further subset the region if possible
+		if ( $bprange ) {
+		    my ($b,$e) = split(/-/,$bprange);
+		    ## no overlap if
+		    ## $b < $e < $beg < $end
+		    ## $beg < $end < $b < $e
+		    next if ( ( $e < $beg ) || ( $end < $b ) );
+		    ## $beg < $e,  $b < $end is guaranteed
+		    ## the interval is max($b,$beg) to min($e,$end)
+		    $beg = $b if ( $b > $beg );
+		    $end = $e if ( $e < $end );
+		}
+		
+		push(@chrIntervals, [$beg,$end]);
+	    }
+	}
+	push(@intervals,\@chrIntervals);
+    }
+    return \@intervals;
+}
+
+sub intervalsByUnit {
+    my ($unit,$rchrs,$rszchrs,$rexbed,$chrom,$bprange) = @_;
+    my @intervals = ();
+    for(my $i=0; $i <= $#{$rchrs}; ++$i) {  ## for each chromosome..
+	my @chrIntervals = ();
+	
+	if ( defined($chrom) && ( $chrom ) && ( $rchrs->[$i] ne $chrom ) ) {
+	    push(@intervals,\@chrIntervals);
+	    next;
+	}
+	
+	my $chr = $rchrs->[$i];
+	my $szchr = $rszchrs->[$i];
+
+	my @exbeds = ();
+	## avoid BED region if possible
+	## starts from [$beg,$end]
+	if ( defined($rexbed) && defined($rexbed->{$chr}) ) {
+	    @exbeds = @{$rexbed->{$chr}}; 
+
+	    for(my $j=0; $j < @exbeds; ++$j) {
+		die "Invalid BED interval $chr:".join("-",@{$exbeds[$j]})."\n" unless ( $exbeds[$j]->[0] < $exbeds[$j]->[1] );
+		die "Unsorted or overlapping BED interval $chr:".join("-",@{$exbeds[$j-1]})." and $chr:".join("-",@{$exbeds[$j]})."\n" if ( ( $j > 0 ) && ( $exbeds[$j-1]->[1] < $exbeds[$j]->[0] ) );
+	    }
+	}
+	
+	for(my $beg=1; $beg < $szchr; $beg += $unit) {
+	    my $end = $beg + $unit - 1;
+	    $end = $szchr if ( $end > $szchr );
+
+	    ## $chr:$beg-$end
+
+	    ## further subset the region if possible
+	    if ( $bprange ) {
+		my ($b,$e) = split(/-/,$bprange);
+		## no overlap if
+		## $b < $e < $beg < $end
+		## $beg < $end < $b < $e
+		next if ( ( $e < $beg ) || ( $end < $b ) );
+		## $beg < $e,  $b < $end is guaranteed
+		## the interval is max($b,$beg) to min($e,$end)
+		$beg = $b if ( $b > $beg );
+		$end = $e if ( $e < $end );
+	    }
+
+	    if ( $#exbeds >= 0 ) {
+		## find intervals that overlaps
+		my $beg0 = $beg-1;
+		my $end1 = $end;
+		my $j = 0;
+		while ( ( $j <= $#exbeds ) && ( $exbeds[$j]->[1] <= $beg0 ) ) {
+		    ++$j;
+		}
+		next if ( $j > $#exbeds );
+		next if ( $exbeds[$j]->[0] >= $end1 );
+
+		## there is overlap
+		while( $beg0 < $end1 ) {
+		    if ( $exbeds[$j]->[0] > $beg0 ) {
+			push(@chrIntervals,[$beg0+1,$exbeds[$j]->[0]]);
+		    }
+		    $beg0 = $exbeds[$j]->[1];
+		    ++$j;
+		    last if ( ( $j > $#exbeds ) || ( $exbeds[$j]->[0] >= $end1 ) );
+		}
+		push(@chrIntervals,[$beg0+1,$end1]) if ( $beg0 < $end1 )
+	    }
+	    else {
+		push(@chrIntervals,[$beg,$end]);
+	    }
+	}
+	push(@intervals,\@chrIntervals);
+    }
+    return \@intervals;
+}
+
+1;
