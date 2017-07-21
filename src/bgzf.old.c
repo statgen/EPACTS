@@ -28,7 +28,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/types.h>
-#include "bgzf.h"
+#include <htslib/bgzf.h>
 
 #ifdef _USE_KNETFILE
 #include "knetfile.h"
@@ -116,7 +116,7 @@ static BGZF *bgzf_write_init(int compress_level) // compress_level==-1 for the d
 {
 	BGZF *fp;
 	fp = calloc(1, sizeof(BGZF));
-	fp->open_mode = 'w';
+	fp-> open_mode = 'w';
 	fp->uncompressed_block = malloc(BGZF_BLOCK_SIZE);
 	fp->compressed_block = malloc(BGZF_BLOCK_SIZE);
 	fp->compress_level = compress_level < 0? Z_DEFAULT_COMPRESSION : compress_level; // Z_DEFAULT_COMPRESSION==-1

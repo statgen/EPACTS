@@ -30,7 +30,7 @@
 
 #include <stdint.h>
 #include "kstring.h"
-#include "bgzf.h"
+#include <htslib/bgzf.h>
 
 #define TI_PRESET_GENERIC 0
 #define TI_PRESET_SAM     1

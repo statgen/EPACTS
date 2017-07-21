@@ -1,5 +1,5 @@
-#ifndef __TABIXED_VCF_H
-#define __TAXBIED_VCF_H
+#ifndef __TABIXED_FVCF_H
+#define __TABIXED_FVCF_H
 
 #include <iostream>
 #include <sstream>
@@ -10,6 +10,11 @@
 #include <ctime>
 #include <cmath>
 #include <set>
+#include <sstream>
+#include <iostream>
+
+#include <savvy/reader.hpp>
+
 #include "pFile.h"
 #include "wFile.h"
 #include "Error.h"
@@ -17,6 +22,23 @@
 #include "PhredHelper.h"
 
 class fVcf {
+private:
+  savvy::indexed_reader reader_;
+
+  static savvy::region string_to_region(const std::string& region_string)
+  {
+    std::string chrom;
+    std::uint32_t start = 0;
+    std::uint32_t end = 0xFFFFFFFF;
+
+    std::istringstream is(region_string);
+    std::getline(is, chrom, ':');
+    is >> start;
+    is.get();
+    is >> end;
+
+    return savvy::region(chrom, start, end);
+  }
 public:
   // member variables
   int nInds;           // number of individuals subselected
@@ -25,7 +47,7 @@ public:
   boolParser parser;   // per-marker pattern matching parser
   bool passOnly;       // filtering option
   bool hardGenotype;   // hard/soft genotypes
-  pFile tf;            // file handle
+  //pFile tf;            // file handle
   std::vector<std::string> inds;     // individual IDs
   std::vector<std::string> markers;  // marker IDs
   std::vector<std::string> chroms;   // chromosome names
@@ -42,7 +64,7 @@ public:
   std::vector<float> sumsqAlleles;   // squared sum of AC
   std::vector<int> icols;            // individual indices to subset
   std::vector<float> AFs;            // allele frequency estimates
-  std::vector< std::vector<float> > covs; 
+  std::vector< std::vector<float> > covs;
 
   std::set<std::string> markerSet;
   std::string groupID, groupChrom;
@@ -66,82 +88,83 @@ public:
     anno.clear();
     while( *pn != '\0' ) {
       switch(step) {
-      case 0: // CHROM[:]
-	if ( *pn == ':' ) { // END PARSING
-	  chrom.assign( pp, pn - pp ); // copy chrom
-	  step = 1;
-	  pp = pn+1;
-	}
-	// otherwise, just skip else {}
-	break;
-      case 1: // BEG
-	if ( *pn == '-' ) { // INTERVAL is given
-	  beg.assign( pp, pn - pp );
-	  step = 2;
-	  pp = pn+1;
-	}
-	else if ( *pn == '_' ) { // BEG==END
-	  beg.assign( pp, pn - pp );
-	  end = beg;
-	  step = 3;
-	  pp = pn+1;
-	}
-	break;
-      case 2: // END
-	if ( *pn == '_' ) { // BEG==END
-	  end.assign( pp, pn - pp );
-	  step = 3;
-	  pp = pn+1;
-	}
-	break;
-      case 3: // NAME
-	if ( *pn == '_' ) {
-	  name.assign( pp, pn - pp );
-	  step = 4;
-	  pp = pn+1;
-	}
-	break;
+        case 0: // CHROM[:]
+          if ( *pn == ':' ) { // END PARSING
+            chrom.assign( pp, pn - pp ); // copy chrom
+            step = 1;
+            pp = pn+1;
+          }
+          // otherwise, just skip else {}
+          break;
+        case 1: // BEG
+          if ( *pn == '-' ) { // INTERVAL is given
+            beg.assign( pp, pn - pp );
+            step = 2;
+            pp = pn+1;
+          }
+          else if ( *pn == '_' ) { // BEG==END
+            beg.assign( pp, pn - pp );
+            end = beg;
+            step = 3;
+            pp = pn+1;
+          }
+          break;
+        case 2: // END
+          if ( *pn == '_' ) { // BEG==END
+            end.assign( pp, pn - pp );
+            step = 3;
+            pp = pn+1;
+          }
+          break;
+        case 3: // NAME
+          if ( *pn == '_' ) {
+            name.assign( pp, pn - pp );
+            step = 4;
+            pp = pn+1;
+          }
+          break;
       }
       ++pn;
     }
 
     if ( pn > pp ) {
       switch(step) {
-      case 0:
-	chrom.assign( pp, pn - pp );
-	break;
-      case 1:
-	beg.assign( pp, pn - pp );
-	end = beg;
-	step = 2;
-	break;
-      case 2:
-	end.assign( pp, pn - pp );
-	break;
-      case 3:
-	name.assign( pp, pn - pp );
-	found = name.find('/');
-	if ( ( found != std::string::npos ) && ( found != 1 ) ) {
-	  sprintf(buf, "%d", atoi(beg.c_str()) + (int)found - 1);
-	  end = buf;
-	}
-	break;
-      case 4:
-	anno.assign( pp, pn - pp );
-	break;
+        case 0:
+          chrom.assign( pp, pn - pp );
+          break;
+        case 1:
+          beg.assign( pp, pn - pp );
+          end = beg;
+          step = 2;
+          break;
+        case 2:
+          end.assign( pp, pn - pp );
+          break;
+        case 3:
+          name.assign( pp, pn - pp );
+          found = name.find('/');
+          if ( ( found != std::string::npos ) && ( found != 1 ) ) {
+            sprintf(buf, "%d", atoi(beg.c_str()) + (int)found - 1);
+            end = buf;
+          }
+          break;
+        case 4:
+          anno.assign( pp, pn - pp );
+          break;
       }
     }
     return step;
   }
 
-  void init(const char* vcf, const char* region, const char* _key, const char* rule, bool pass) {
+  void init(const char* vcf, const savvy::region& region, const char* _key, const char* rule, bool pass) {
     nInds = 0;
     nMarkers = 0;
     key = _key;
     parser = rule;
     passOnly = pass;
     hardGenotype = ( key == "GT" ? true : false);
-    tf.load(vcf, region, true);
+
+    reader_ = savvy::indexed_reader(vcf, region);
 
     if ( key == "GL" ) {
       glFlag = true;
@@ -163,75 +186,39 @@ public:
     if ( indf != NULL ) {
       pFile tind(indf);
       while( (line = (char*)tind.getLine()) != NULL ) {
-	if ( line[0] == '#' ) continue;
-	char* p = line;
-	while( ( *p != ' ' ) && ( *p & 0xf0 ) ) { ++p; }
-	std::string id(line,p-line);
-	if ( idset.find(id) != idset.end() ) {
-	  error("ERROR: Duplicate individual ID %s in %s",id.c_str(),indf);
-	}
-	idset.insert(id);
+        if ( line[0] == '#' ) continue;
+        char* p = line;
+        while( ( *p != ' ' ) && ( *p & 0xf0 ) ) { ++p; }
+        std::string id(line,p-line);
+        if ( idset.find(id) != idset.end() ) {
+          error("ERROR: Duplicate individual ID %s in %s",id.c_str(),indf);
+        }
+        idset.insert(id);
       }
     }
     load(vcf, region, _key, rule, pass, idset);
   }
 
   void load(const char* vcf, const char* region, const char* _key, const char* rule, bool pass, std::set<std::string>& idset) {
-    init(vcf, region, _key, rule, pass);
-    
-    // read VCF header
-    char* line;
-    //int nc;
-    while ( (line = (char*)tf.getLine()) != NULL ) {
-      //nc = tf.getLength();
-      if ( line[0] == '#' ) {
-	if ( strncmp(line,"#CHROM",6) == 0 ) {
-	  nInds = parseInds(line, idset);
-	  break;
-	}
-	else if ( line[1] == '#' ) {
-	  // store meta lines;
-	  headers.push_back(line);
-	}
-      }
-      else {
-	error("Non-header line %s is observed before #CHROM in %s",line,vcf);
-      }
-    }
-   
+    init(vcf, string_to_region(region), _key, rule, pass);
+    nInds = parseInds(reader_.samples_begin(), reader_.samples_end(), idset);
+    // TODO: get headers if needed. headers.push_back(line);
+
     if ( ( idset.size() > 0 ) && ( idset.size() != icols.size() ) ) {
       warning("Identified %d individuals from index file, and only %d overlaps with VCF",(int)idset.size(),(int)icols.size());
     }
   }
 
   void load(const char* vcf, const char* region, const char* _key, const char* rule, bool pass, std::vector<int>& subcols) {
-    init(vcf, region, _key, rule, pass);
-    
-    // read VCF header
-    char* line;
-    //int nc;
-    while ( (line = (char*)tf.getLine()) != NULL ) {
-      //nc = tf.getLength();
-      if ( line[0] == '#' ) {
-	if ( strncmp(line,"#CHROM",6) == 0 ) {
-	  nInds = parseInds(line, subcols);
-	  break;
-	}
-	else if ( line[1] == '#' ) {
-	  // parse meta line???
-	}
-      }
-      else {
-	error("Non-header line %s is observed before #CHROM in %s",line,vcf);
-      }
-    }
-    
+    init(vcf, string_to_region(region), _key, rule, pass);
+    nInds = parseInds(reader_.samples_begin(), reader_.samples_end(), subcols);
+
     if ( ( subcols.size() > 0 ) && ( (int)subcols.size() != nInds ) ) {
       warning("Identified %d individuals from index file, and nInds = %d",(int)subcols.size(),nInds);
     }
   }
 
- fVcf() : nInds(0), nMarkers(0), passOnly(false) {}
+  fVcf() : nInds(0), nMarkers(0), passOnly(false) {}
 
   void clear() {
     markers.clear();
@@ -277,10 +264,10 @@ public:
   float alleleFreq(int m) {
     if ( glFlag ) {
       if ( (int)AFs.size() < m + 1 ) {
-	AFs.resize(m+1,-1);
+        AFs.resize(m+1,-1);
       }
       if ( AFs[m] < 0 ) {
-	AFs[m] = (float)(emAF(m,1e-6).first);
+        AFs[m] = (float)(emAF(m,1e-6).first);
       }
       return AFs[m];
     }
@@ -308,12 +295,12 @@ public:
       float g;
       int cnts[3] = {0,0,0};
       for(int j=0; j < nInds; ++j) {
-	g = genos[(size_t)m*(size_t)nInds + j];
-	if ( !isnan(g) ) { // do not count missing at any place
-	  if ( g < 0.5 ) ++cnts[0];
-	  else if ( g >= 1.5 ) ++cnts[2];
-	  else ++cnts[1];
-	}
+        g = genos[(size_t)m*(size_t)nInds + j];
+        if ( !isnan(g) ) { // do not count missing at any place
+          if ( g < 0.5 ) ++cnts[0];
+          else if ( g >= 1.5 ) ++cnts[2];
+          else ++cnts[1];
+        }
       }
       return cnts[2];
     }
@@ -337,12 +324,12 @@ public:
       float g;
       cnts[0] = cnts[1] = cnts[2] = 0;
       for(int j=0; j < nInds; ++j) {
-	g = genos[(size_t)m*(size_t)nInds + j];
-	if ( !isnan(g) ) { // do not count missing at any place
-	  if ( g < 0.5 ) ++cnts[0];
-	  else if ( g >= 1.5 ) ++cnts[2];
-	  else ++cnts[1];
-	}
+        g = genos[(size_t)m*(size_t)nInds + j];
+        if ( !isnan(g) ) { // do not count missing at any place
+          if ( g < 0.5 ) ++cnts[0];
+          else if ( g >= 1.5 ) ++cnts[2];
+          else ++cnts[1];
+        }
       }
     }
   }
@@ -353,9 +340,9 @@ public:
     for(int j=0; j < nInds; ++j) {
       g = genos[(size_t)m*(size_t)nInds + j];
       if ( !isnan(g) ) { // do not count missing at any place
-	if ( g < 0.5 ) ++cnts[0+isCases[j]*3];
-	else if ( g >= 1.5 ) ++cnts[2+isCases[j]*3];
-	else ++cnts[1+isCases[j]*3];
+        if ( g < 0.5 ) ++cnts[0+isCases[j]*3];
+        else if ( g >= 1.5 ) ++cnts[2+isCases[j]*3];
+        else ++cnts[1+isCases[j]*3];
       }
     }
   }
@@ -384,272 +371,292 @@ public:
     if ( inds.size() > 0 ) {
       fprintf(fp, "#MARKER");
       for(int i=0; i < nInds; ++i) {
-	if ( inds.empty() ) {
-	  fprintf(fp, "\tID%d", i+1);
-	}
-	else {
-	  fprintf(fp, "\t%s", inds[i].c_str());
-	}
+        if ( inds.empty() ) {
+          fprintf(fp, "\tID%d", i+1);
+        }
+        else {
+          fprintf(fp, "\t%s", inds[i].c_str());
+        }
       }
       fprintf(fp,"\n");
     }
     for(int i=0; i < nMarkers; ++i) {
       fprintf(fp, "%s", markers[i].c_str());
       for(int j=0; j < nInds; ++j) {
-	v = genos[(size_t)i*(size_t)nInds + j];
-	if ( isnan(v) ) {
-	  fprintf(fp,"\tNA");
-	}
-	else {
-	  fprintf(fp, "\t%.4f", genos[(size_t)i*(size_t)nInds + j]);
-	}
+        v = genos[(size_t)i*(size_t)nInds + j];
+        if ( isnan(v) ) {
+          fprintf(fp,"\tNA");
+        }
+        else {
+          fprintf(fp, "\t%.4f", genos[(size_t)i*(size_t)nInds + j]);
+        }
       }
       fprintf(fp,"\n");
     }
   }
 
-  int parseMarkers(char* line, int startIdx = 9) {
+  int parseMarkers(savvy::variant_vector<std::vector<float>> var, int startIdx = 9) {
     //notice("fVcf::parseMarkers() called");
     //, std::vector<std::string>& m, std::vector<float>& v, int startIdx = 9, const char* key = "GT", const char** infoSubstrs = NULL, int nSubstr = 0) {
     char* p;
     char* n;
-    char* pch = line;
-    char* nch = NULL;
-    std::string chrom;
-    std::string pos;
-    std::string ref;
-    std::string alt;
-    std::string markerId;
-    std::string markerKey;
+
+    std::string chrom = var.chromosome();
+    std::string pos = std::to_string(var.locus());
+    std::string ref = var.ref();
+    std::string alt = var.alt();
+    std::string markerId = var.prop("ID");
+    std::string markerKey = chrom+":"+pos+"_"+ref+"/"+alt;
+    if ( markerSet.find(markerKey) == markerSet.end() ) {
+      return -1;
+    }
+    if ( ( passOnly ) && ( var.prop("FILTER") != "PASS" ) ) return -1;
+
     std::string s;
     int keyIdx = 0;
     int i, j, k, l;
     int lKey = (int)key.size();
-    int AN = 0;
-    float AC = 0, sqAC = 0;
-    float f;
 
-    for(i=0, j=0; pch != NULL; ++i) {
-      nch = strchr(pch, '\t');
-      if ( i < startIdx ) {
-	if ( i < 7 ) {
-	  if ( nch == NULL ) s.assign( pch );
-	  else s.assign( pch, nch - pch );
-
-	  switch(i) {
-	  case 0:                // copy chromosomes
-	    chrom = s; break;
-	  case 1:                // copy pos
-	    pos = s; break;
-	  case 2:                // marker_id
-	    markerId = s; break;
-	  case 3:                // reference allele
-	    ref = s; break;
-	  case 4:                // non-reference alleles
-	    alt = s;  // if it is not in the predefined markerSet, skip the marker
-	    if ( ! markerSet.empty() ) {
-	      markerKey = chrom+":"+pos+"_"+ref+"/"+alt;
-	      if ( markerSet.find(markerKey) == markerSet.end() ) {
-		return -1;
-	      }
-	    }
-	    break;
-	  case 6:
-	    if ( ( passOnly ) && ( s != "PASS" ) ) return -1;
-	  }
-	}
-	else if ( i == 7 ) { // parse INFO field
-	  if ( nch == NULL ) {
-	    // If the VCF is site only, parse AC & AN information
-	    // from the INFO field, if exists
-	    char* ic;
-	    AC = AN = 0;
-	    if ( (ic = strstr(pch, "AC=")) != NULL ) {
-	      AC = (float)atoi(ic+3);
-	    }
-	    if ( (ic = strstr(pch, "AN=")) != NULL ) {
-	      AN = atoi(ic+3);
-	    }
-	    if ( AN == 0 ) {
-	      error("AN is not observed in INFO field in site only VCF");
-	    }
-	    else {
-	      double af = (double)AC/(double)AN;
-	      sqAC = floor(2*AN*af*(1.+af)+.5); // assumes HWE sqAC = p^2 * 4 + 2p(1-p) = 2p(1+p)
-	    }
-
-	    if ( !parser.parse( pch ) ) return -1; 
-	  }
-	  else { if ( !parser.parse( pch, nch - pch ) ) return -1; }
-	}
-	else if ( i == 8 ) { // parse FORMAT field
-	  if ( pch[0] == key[0] && pch[1] == key[1] && ( ( nch == pch + 2 ) || ( pch[2] == ':' ) ) ) { // comparing two characters are not exactly right
-	    keyIdx = 0;
-	  }
-	  else if ( nch == NULL ) {
-	    error("VCF has FORMAT field but does not have any genotype");
-	  }
-	  else {
-	    k = 0;
-	    keyIdx = 0;
-	    p = pch;
-            l = 0;
-	    while( p < nch ) {
-	      if ( *p == ':' ) { 
-		if (( k >= lKey ) && ( k == l )) {
-		  break;
-		}
-		else {
-		  ++keyIdx;
-		  k = 0;
-                  l = 0;
-		}
-	      }
-	      else {
-		//if ( ( k == 2 ) || ( key[k] == *p ) ) {
-		if ( key[k] == *p ) {
-		  ++k;
-		}
-		else {
-		  k = 0;
-		}
-                ++l;
-	      }
-	      ++p;
-	    }
-	    if ( ( k != l ) || ( k != lKey ) ) {
-	      warning("Cannot find %s in the FORMAT field at marker %s:%s_%s/%s .. Skipping",key.c_str(),chrom.c_str(),pos.c_str(),ref.c_str(),alt.c_str());
-	      return -1;
-	    }
-	  }
-	}
-      }
-      else {
-	if ( icols.empty() || ( ( j < (int)icols.size() ) && ( icols[j] == i - startIdx ) ) ) {
-	  p = pch;
-	  n = NULL;
-	  
-	  // reach to the key index
-	  if ( keyIdx > 0 ) {
-	    for(int i=0; (i < keyIdx) && (p != NULL); ++i) {
-	      n = strchr(p, ':');
-	      p = (n == NULL) ? NULL : n+1;
-	    }
-	  }
-	  
-	  // if the field contains '/' or '|', add two values
-	  // if the field is '.', return NA
-	  // otherwise, convert the field into float and return
-	  if ( ( p == NULL ) || ( p[0] == '.' ) ) { // missing
-	    if ( glFlag ) {
-	      PLs.push_back(0);
-	      PLs.push_back(0);
-	      PLs.push_back(0);
-	    }
-	    else {
-	      genos.push_back(NAN_FLT);
-	      phases.push_back(0); // unphased
-	    }
-	  }
-	  else if ( ( p[1] == '/' ) || ( p[1] == '|' ) ) {
-	    f = (float)((p[0] - '0') + ( p[2] - '0' )); // ignore phase info
-	    genos.push_back(f);
-	    phases.push_back((p[1] == '|') ? ( (p[0] == p[2]) ? 1 : (p[0] < p[2] ? 2 : 3) ) : 0);
-	    AN += 2;
-	    AC += f;
-	    sqAC += f*f;
-	  }
-	  else { // Genotypes are not in 0|0 format
-	    if ( glFlag ) { // search for three commas
-	      char* c1 = strchr(p,',');
-	      if ( c1 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
-	      char* c2 = strchr(c1+1,',');
-	      if ( c2 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
-	      if ( phredFlag ) {
-		int pl = atoi(p);
-		if ( pl > 255 ) pl = 255;
-		PLs.push_back(pl);
-		pl = atoi(c1+1);
-		if ( pl > 255 ) pl = 255;
-		PLs.push_back(pl);
-		pl = atoi(c2+1);
-		if ( pl > 255 ) pl = 255;
-		PLs.push_back(pl);
-	      }
-	      else {
-		float gl = strtof(p,NULL);
-		if ( gl < -25.5 ) PLs.push_back(255);
-		else PLs.push_back((int)(-10*gl+.5));
-
-		gl = strtof(c1+1,NULL);
-		if ( gl < -25.5 ) PLs.push_back(255);
-		else PLs.push_back((int)(-10*gl+.5));
-
-		gl = strtof(c2+1,NULL);
-		if ( gl < -25.5 ) PLs.push_back(255);
-		else PLs.push_back((int)(-10*gl+.5));
-	      }
-	    }
-	    else {  // take genos as dosages
-	      f = strtof(p,NULL);
-	      genos.push_back(f);
-	      phases.push_back(0);
-	      AN += 2;
-	      AC += f;
-	      sqAC += f*f;
-	    }
-	  }
-	  ++j;
-	}
-	else {
-	  //std::cout << "Skipping " << i << "\t" << j << std::endl;
-	}
-      }
-      pch = ( nch == NULL ) ? NULL : nch + 1;
+    int AN = atoi(var.prop("AN").c_str()) + 3;
+    float AC = atoi(var.prop("AC").c_str()) + 3;
+    float sqAC = 0.0;
+    if (AN == 0) {
+      error("AN is not observed in INFO field in site only VCF");
+    }
+    else {
+      double af = (double)AC/(double)AN;
+      sqAC = floor(2*AN*af*(1.+af)+.5); // assumes HWE sqAC = p^2 * 4 + 2p(1-p) = 2p(1+p)
     }
 
+    float f;
+
+//    for(i=0, j=0; pch != NULL; ++i) {
+//      nch = strchr(pch, '\t');
+//      if ( i < startIdx ) {
+//        if ( i < 7 ) {
+//          if ( nch == NULL ) s.assign( pch );
+//          else s.assign( pch, nch - pch );
+//
+//          switch(i) {
+//            case 0:                // copy chromosomes
+//              chrom = s; break;
+//            case 1:                // copy pos
+//              pos = s; break;
+//            case 2:                // marker_id
+//              markerId = s; break;
+//            case 3:                // reference allele
+//              ref = s; break;
+//            case 4:                // non-reference alleles
+//              alt = s;  // if it is not in the predefined markerSet, skip the marker
+//              if ( ! markerSet.empty() ) {
+//                markerKey = chrom+":"+pos+"_"+ref+"/"+alt;
+//                if ( markerSet.find(markerKey) == markerSet.end() ) {
+//                  return -1;
+//                }
+//              }
+//              break;
+//            case 6:
+//              if ( ( passOnly ) && ( s != "PASS" ) ) return -1;
+//          }
+//        }
+//        else if ( i == 7 ) { // parse INFO field
+//          if ( nch == NULL ) {
+//            // If the VCF is site only, parse AC & AN information
+//            // from the INFO field, if exists
+//            char* ic;
+//            AC = AN = 0;
+//            if ( (ic = strstr(pch, "AC=")) != NULL ) {
+//              AC = (float)atoi(ic+3);
+//            }
+//            if ( (ic = strstr(pch, "AN=")) != NULL ) {
+//              AN = atoi(ic+3);
+//            }
+//            if ( AN == 0 ) {
+//              error("AN is not observed in INFO field in site only VCF");
+//            }
+//            else {
+//              double af = (double)AC/(double)AN;
+//              sqAC = floor(2*AN*af*(1.+af)+.5); // assumes HWE sqAC = p^2 * 4 + 2p(1-p) = 2p(1+p)
+//            }
+//
+//            if ( !parser.parse( pch ) ) return -1;
+//          }
+//          else { if ( !parser.parse( pch, nch - pch ) ) return -1; }
+//        }
+//        else if ( i == 8 ) { // parse FORMAT field
+//          if ( pch[0] == key[0] && pch[1] == key[1] && ( ( nch == pch + 2 ) || ( pch[2] == ':' ) ) ) { // comparing two characters are not exactly right
+//            keyIdx = 0;
+//          }
+//          else if ( nch == NULL ) {
+//            error("VCF has FORMAT field but does not have any genotype");
+//          }
+//          else {
+//            k = 0;
+//            keyIdx = 0;
+//            p = pch;
+//            l = 0;
+//            while( p < nch ) {
+//              if ( *p == ':' ) {
+//                if (( k >= lKey ) && ( k == l )) {
+//                  break;
+//                }
+//                else {
+//                  ++keyIdx;
+//                  k = 0;
+//                  l = 0;
+//                }
+//              }
+//              else {
+//                //if ( ( k == 2 ) || ( key[k] == *p ) ) {
+//                if ( key[k] == *p ) {
+//                  ++k;
+//                }
+//                else {
+//                  k = 0;
+//                }
+//                ++l;
+//              }
+//              ++p;
+//            }
+//            if ( ( k != l ) || ( k != lKey ) ) {
+//              warning("Cannot find %s in the FORMAT field at marker %s:%s_%s/%s .. Skipping",key.c_str(),chrom.c_str(),pos.c_str(),ref.c_str(),alt.c_str());
+//              return -1;
+//            }
+//          }
+//        }
+//      }
+//      else {
+//        if ( icols.empty() || ( ( j < (int)icols.size() ) && ( icols[j] == i - startIdx ) ) ) {
+//          p = pch;
+//          n = NULL;
+//
+//          // reach to the key index
+//          if ( keyIdx > 0 ) {
+//            for(int i=0; (i < keyIdx) && (p != NULL); ++i) {
+//              n = strchr(p, ':');
+//              p = (n == NULL) ? NULL : n+1;
+//            }
+//          }
+//
+//          // if the field contains '/' or '|', add two values
+//          // if the field is '.', return NA
+//          // otherwise, convert the field into float and return
+//          if ( ( p == NULL ) || ( p[0] == '.' ) ) { // missing
+//            if ( glFlag ) {
+//              PLs.push_back(0);
+//              PLs.push_back(0);
+//              PLs.push_back(0);
+//            }
+//            else {
+//              genos.push_back(NAN_FLT);
+//              phases.push_back(0); // unphased
+//            }
+//          }
+//          else if ( ( p[1] == '/' ) || ( p[1] == '|' ) ) {
+//            f = (float)((p[0] - '0') + ( p[2] - '0' )); // ignore phase info
+//            genos.push_back(f);
+//            phases.push_back((p[1] == '|') ? ( (p[0] == p[2]) ? 1 : (p[0] < p[2] ? 2 : 3) ) : 0);
+//            AN += 2;
+//            AC += f;
+//            sqAC += f*f;
+//          }
+//          else { // Genotypes are not in 0|0 format
+//            if ( glFlag ) { // search for three commas
+//              char* c1 = strchr(p,',');
+//              if ( c1 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
+//              char* c2 = strchr(c1+1,',');
+//              if ( c2 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
+//              if ( phredFlag ) {
+//                int pl = atoi(p);
+//                if ( pl > 255 ) pl = 255;
+//                PLs.push_back(pl);
+//                pl = atoi(c1+1);
+//                if ( pl > 255 ) pl = 255;
+//                PLs.push_back(pl);
+//                pl = atoi(c2+1);
+//                if ( pl > 255 ) pl = 255;
+//                PLs.push_back(pl);
+//              }
+//              else {
+//                float gl = strtof(p,NULL);
+//                if ( gl < -25.5 ) PLs.push_back(255);
+//                else PLs.push_back((int)(-10*gl+.5));
+//
+//                gl = strtof(c1+1,NULL);
+//                if ( gl < -25.5 ) PLs.push_back(255);
+//                else PLs.push_back((int)(-10*gl+.5));
+//
+//                gl = strtof(c2+1,NULL);
+//                if ( gl < -25.5 ) PLs.push_back(255);
+//                else PLs.push_back((int)(-10*gl+.5));
+//              }
+//            }
+//            else {  // take genos as dosages
+//              f = strtof(p,NULL);
+//              genos.push_back(f);
+//              phases.push_back(0);
+//              AN += 2;
+//              AC += f;
+//              sqAC += f*f;
+//            }
+//          }
+//          ++j;
+//        }
+//        else {
+//          //std::cout << "Skipping " << i << "\t" << j << std::endl;
+//        }
+//      }
+//      pch = ( nch == NULL ) ? NULL : nch + 1;
+//    }
+
+    j = var.size();
     if ( (nInds == 0) && icols.empty() && ((int)genos.size() == j) ) nInds = j;
 
     if ( nInds != j ) {
-      fprintf(stderr,"i=%d, j=%d, nInds=%d, icols.size()=%d, genos.back()=%d\n",i,j,nInds,(int)icols.size(),(int)genos.back());
+      fprintf(stderr,"j=%d, nInds=%d, icols.size()=%d, genos.back()=%d\n",j,nInds,(int)icols.size(),(int)genos.back());
       abort();
     }
 
-    // if GL or PL flag is set, automatically put dosage as quantitative genotypes
-    if ( glFlag ) {
-      //notice("fVcf::parseMarkers() - glFlag is on");
-
-      // set allele frequency
-      int m = markers.size();  //notice("fVcf::parseMarkers() - m = %d",m);
-      float af = (float)(emAF(m,1e-6).first); //notice("fVcf::parseMarkers() - af = %f",af);
-      if ( (int)AFs.size() > m ) { AFs[m] = af; }
-      else if ( (int)AFs.size() == m ) { AFs.push_back(af); }
-      else { error("fVcf::parseMarkers() -- AFs.size() < m"); }
-
-      double p0,p1,p2;
-      int kos;
-      for(int k=0; k < j; ++k) {
-	// calculate genotype dosages under HWE
-	// Pr(G|D) = Pr(D|G)Pr(G)
-	kos = 3*(m*nInds+k);
-	p0 = phredConv.phred2Err[PLs[kos+0]] * (1.-AFs[m]) * (1.-AFs[m]);
-	p1 = phredConv.phred2Err[PLs[kos+1]] * 2. * AFs[m] * (1.-AFs[m]);
-	p2 = phredConv.phred2Err[PLs[kos+2]] * AFs[m] * AFs[m];
-	if ( p0+p1+p2 > 0 ) {
-	  genos.push_back((p1+2*p2)/(p0+p1+p2));
-	  phases.push_back(0);
-	}
-	else {
-	  genos.push_back(AFs[m]*2.);
-	  phases.push_back(0);
-	}
-	if ( gpFlag ) { GPs.push_back(p0); GPs.push_back(p1); GPs.push_back(p2); }
-
-	AN += 2;
-	AC += genos.back();
-	sqAC += genos.back()*genos.back();
-      }
+    for (auto it = var.begin(); it != var.end(); ++it)
+    {
+      genos.push_back(*it);
     }
+
+//    // if GL or PL flag is set, automatically put dosage as quantitative genotypes
+//    if ( glFlag ) {
+//      //notice("fVcf::parseMarkers() - glFlag is on");
+//
+//      // set allele frequency
+//      int m = markers.size();  //notice("fVcf::parseMarkers() - m = %d",m);
+//      float af = (float)(emAF(m,1e-6).first); //notice("fVcf::parseMarkers() - af = %f",af);
+//      if ( (int)AFs.size() > m ) { AFs[m] = af; }
+//      else if ( (int)AFs.size() == m ) { AFs.push_back(af); }
+//      else { error("fVcf::parseMarkers() -- AFs.size() < m"); }
+//
+//      double p0,p1,p2;
+//      int kos;
+//      for(int k=0; k < j; ++k) {
+//        // calculate genotype dosages under HWE
+//        // Pr(G|D) = Pr(D|G)Pr(G)
+//        kos = 3*(m*nInds+k);
+//        p0 = phredConv.phred2Err[PLs[kos+0]] * (1.-AFs[m]) * (1.-AFs[m]);
+//        p1 = phredConv.phred2Err[PLs[kos+1]] * 2. * AFs[m] * (1.-AFs[m]);
+//        p2 = phredConv.phred2Err[PLs[kos+2]] * AFs[m] * AFs[m];
+//        if ( p0+p1+p2 > 0 ) {
+//          genos.push_back((p1+2*p2)/(p0+p1+p2));
+//          phases.push_back(0);
+//        }
+//        else {
+//          genos.push_back(AFs[m]*2.);
+//          phases.push_back(0);
+//        }
+//        if ( gpFlag ) { GPs.push_back(p0); GPs.push_back(p1); GPs.push_back(p2); }
+//
+//        AN += 2;
+//        AC += genos.back();
+//        sqAC += genos.back()*genos.back();
+//      }
+//    }
 
     //notice("AC=%f, AN=%d, sqAC=%f",AC,AN,sqAC);
 
@@ -1082,35 +1089,35 @@ public:
       nch = strchr(pch, '\t');
       if ( nch == NULL ) { nch = pch + strlen(pch); }
       if ( i < startIdx ) {
-	if ( i > 0 ) wf.putc('\t');
-	if ( ( i < 7 ) || (i == 8 ) ) {   // copy until FILTER field
-	  for(p=pch; p < nch; ++p) { wf.putc(*p); }
-	}
-	else if ( i == 7 ) { // special handling for INFO field
-	  // remove AC, AN, AF columns if exists
-	  std::vector<std::string> tokens;
-	  std::string info( pch, nch - pch );
-	  pFile::tokenizeLine(info.c_str(),";",tokens);
-	  wf.printf("AC=%d;AN=%d;NS=%d;AF=%.5f",(int)sumAlleles.back(),(int)numAlleles.back(),(int)numAlleles.back()/2,( numAlleles.back() > 0 ) ? (sumAlleles.back() / (float)numAlleles.back()) : 0);
-	  for(k=0; k < (int)tokens.size(); ++k) {
-	    if ( ( tokens[k].compare(0,3,"AC=") == 0 ) ||
-		 ( tokens[k].compare(0,3,"AN=") == 0 ) ||
-		 ( tokens[k].compare(0,3,"NS=") == 0 ) ||
-		 ( tokens[k].compare(0,3,"AF=") == 0 ) ) {
-	      // skip
-	    }
-	    else { 
-	      wf.printf(";%s",tokens[k].c_str());
-	    }
-	  }
-	}
+        if ( i > 0 ) wf.putc('\t');
+        if ( ( i < 7 ) || (i == 8 ) ) {   // copy until FILTER field
+          for(p=pch; p < nch; ++p) { wf.putc(*p); }
+        }
+        else if ( i == 7 ) { // special handling for INFO field
+          // remove AC, AN, AF columns if exists
+          std::vector<std::string> tokens;
+          std::string info( pch, nch - pch );
+          pFile::tokenizeLine(info.c_str(),";",tokens);
+          wf.printf("AC=%d;AN=%d;NS=%d;AF=%.5f",(int)sumAlleles.back(),(int)numAlleles.back(),(int)numAlleles.back()/2,( numAlleles.back() > 0 ) ? (sumAlleles.back() / (float)numAlleles.back()) : 0);
+          for(k=0; k < (int)tokens.size(); ++k) {
+            if ( ( tokens[k].compare(0,3,"AC=") == 0 ) ||
+                 ( tokens[k].compare(0,3,"AN=") == 0 ) ||
+                 ( tokens[k].compare(0,3,"NS=") == 0 ) ||
+                 ( tokens[k].compare(0,3,"AF=") == 0 ) ) {
+              // skip
+            }
+            else {
+              wf.printf(";%s",tokens[k].c_str());
+            }
+          }
+        }
       }
       else {
-	if ( icols.empty() || ( ( j < (int)icols.size() ) && ( icols[j] == i - startIdx ) ) ) {
-	  wf.putc('\t');
-	  for(p=pch; p < nch; ++p) { wf.putc(*p); }
-	  ++j;
-	}
+        if ( icols.empty() || ( ( j < (int)icols.size() ) && ( icols[j] == i - startIdx ) ) ) {
+          wf.putc('\t');
+          for(p=pch; p < nch; ++p) { wf.putc(*p); }
+          ++j;
+        }
       }
       pch = ( *nch == '\0' ) ? NULL : nch+1;
     }
@@ -1119,45 +1126,39 @@ public:
     return j;
   }
 
-  int parseInds(char* line, std::set<std::string>& idset, int startIdx = 9) {
-    char* pch = line;
-    char* nch = NULL;
+  template <typename SampleIter>
+  int parseInds(SampleIter sample_beg, SampleIter sample_end, std::set<std::string>& idset, int startIdx = 9) {
     int i, j;
 
     icols.clear();
-    for(i=0, j=0; pch != NULL; ++i) {
-      nch = strchr(pch, '\t');
+    for(i=0, j=0; sample_beg != sample_end; ++i,++sample_beg) {
       if ( i >= startIdx ) {
-	std::string id = (nch == NULL) ? std::string(pch) : std::string(pch,nch-pch);
-	if ( idset.empty() || (idset.find(id) != idset.end()) ) {
-	  icols.push_back(i - startIdx);
-	  inds.push_back(id);
-	  ++j;
-	}
+        std::string id = *sample_beg;
+        if ( idset.empty() || (idset.find(id) != idset.end()) ) {
+          icols.push_back(i - startIdx);
+          inds.push_back(id);
+          ++j;
+        }
       }
-      pch = ( nch == NULL ) ? NULL : nch + 1;
     }
     //notice("icols.size() = %d",(int)icols.size());
     return j;
   }
 
-  int parseInds(char* line, std::vector<std::string>& subids, int startIdx = 9) {
-    char* pch = line;
-    char* nch = NULL;
+  template <typename SampleIter>
+  int parseInds(SampleIter sample_beg, SampleIter sample_end, std::vector<std::string>& subids, int startIdx = 9) {
     int i, j;
 
     icols.clear();
-    for(i=0, j=0; pch != NULL; ++i) {
-      nch = strchr(pch, '\t');
+    for(i=0, j=0; sample_beg != sample_end; ++i,++sample_beg) {
       if ( i >= startIdx ) {
-	std::string id = (nch == NULL) ? std::string(pch) : std::string(pch,nch-pch);
-	if ( subids[(int)icols.size()] == id ) {
-	  icols.push_back(i - startIdx);
-	  inds.push_back(id);
-	  ++j;
-	}
+        std::string id = *sample_beg;
+        if ( subids[(int)icols.size()] == id ) {
+          icols.push_back(i - startIdx);
+          inds.push_back(id);
+          ++j;
+        }
       }
-      pch = ( nch == NULL ) ? NULL : nch + 1;
     }
     if ( j != (int)subids.size() ) {
       error("ERROR in fVcf::parseInds() - not all subids matches");
@@ -1165,30 +1166,25 @@ public:
     return j;
   }
 
-  int parseInds(char* line, std::vector<int>& subcols, int startIdx = 9) {
+  template <typename SampleIter>
+  int parseInds(SampleIter sample_beg, SampleIter sample_end, std::vector<int>& subcols, int startIdx = 9) {
     //notice("fVcf::parseInds(char*, std::vector<int>&) called");
-
-    char* pch = line;
-    char* nch = NULL;
     int i, j;
 
     icols.clear();
-    for(i=0, j=0; pch != NULL; ++i) {
-      nch = strchr(pch, '\t');
+    for(i=0, j=0; sample_beg != sample_end; ++i,++sample_beg) {
       if ( i >= startIdx ) {
-	if ( subcols.empty() || 
-	     ( ( j < (int)subcols.size() ) && ( subcols[j] == i - startIdx ) ) ) {
-	  icols.push_back(i - startIdx);
-	  std::string id = (nch == NULL) ? std::string(pch) : std::string(pch,nch-pch);
-	  inds.push_back(id);
-	  ++j;
-	}
-	else { // Skip the individual
-	  //std::cerr << "Skipping " << i << "\t" << j << std::endl;
-	  //abort();
-	}
+        if ( subcols.empty() ||
+             ( ( j < (int)subcols.size() ) && ( subcols[j] == i - startIdx ) ) ) {
+          icols.push_back(i - startIdx);
+          inds.push_back(*sample_beg);
+          ++j;
+        }
+        else { // Skip the individual
+          //std::cerr << "Skipping " << i << "\t" << j << std::endl;
+          //abort();
+        }
       }
-      pch = ( nch == NULL ) ? NULL : nch + 1;
     }
     return j;
   }
@@ -1202,11 +1198,10 @@ public:
     return readMarkerGroup(markerIDs,startIndex,sepchr);
   }
 
-  int readMarkerGroup(std::vector<std::string>& markerIDs, 
-		      int startIndex = 0, bool sepchr = false) 
+  int readMarkerGroup(std::vector<std::string>& markerIDs,
+                      int startIndex = 0, bool sepchr = false)
   {
-    //int nc;
-    char* line = NULL;
+    savvy::variant_vector<std::vector<float>> var;
 
     std::string curChrom;
     int beg = 1000000000, end = 0;
@@ -1215,7 +1210,7 @@ public:
     for(int i=startIndex; i < (int)markerIDs.size(); ++i) {
       pFile::tokenizeLine(markerIDs[i].c_str(),":_/",tokens);
       if ( tokens.size() != 4 ) {
-	error("Cannot parse markerID %s",markerIDs[i].c_str());
+        error("Cannot parse markerID %s",markerIDs[i].c_str());
       }
       std::string region(tokens[0]);
       region += ":";
@@ -1224,36 +1219,36 @@ public:
       region += tokens[1];
 
       if ( i == startIndex ) {
-	curChrom = tokens[0];
-	beg = end = atoi(tokens[1].c_str());
+        curChrom = tokens[0];
+        beg = end = atoi(tokens[1].c_str());
       }
       else {
-	if ( curChrom != tokens[0] ) { 
-	  curChrom = "multichrs";
-	  beg = end = 0;
-	  //error("Currently group across different chromosomes are not supported"); 
-	}
-	else {
-	  int bp = atoi(tokens[1].c_str());
-	  if ( beg > bp ) { beg = bp; }
-	  if ( end < bp ) { end = bp; }
-	}
+        if ( curChrom != tokens[0] ) {
+          curChrom = "multichrs";
+          beg = end = 0;
+          //error("Currently group across different chromosomes are not supported");
+        }
+        else {
+          int bp = atoi(tokens[1].c_str());
+          if ( beg > bp ) { beg = bp; }
+          if ( end < bp ) { end = bp; }
+        }
       }
 
-      tf.updateRegion(region.c_str(),sepchr);
+      reader_.reset_region(string_to_region(region));
 
       markerSet.clear();
       markerSet.insert(markerIDs[i]);
-      while ( (line = (char*)tf.getLine()) != NULL ) {
-	//nc = tf.getLength();
-	int cols2 = parseMarkers(line); 
-	if ( cols2 >= 0 ) {
-	  if ( nInds != cols2 ) {
-	    error("fVcf::readMarkers() : Column size does not match : %d vs %d at marker %s", nInds, cols2, markers[markers.size()-1].c_str() );
-	    abort();
-	  }
-	  ++nMarkers;
-	}
+      while (glFlag ?  reader_ >> reinterpret_cast<savvy::dense_dosage_vector<float>&>(var) :  reader_ >> reinterpret_cast<savvy::dense_genotype_vector<float>&>(var)) {
+        //nc = tf.getLength();
+        int cols2 = parseMarkers(var);
+        if ( cols2 >= 0 ) {
+          if ( nInds != cols2 ) {
+            error("fVcf::readMarkers() : Column size does not match : %d vs %d at marker %s", nInds, cols2, markers[markers.size()-1].c_str() );
+            abort();
+          }
+          ++nMarkers;
+        }
       }
     }
 
@@ -1269,42 +1264,39 @@ public:
     return nMarkers;
   }
 
+  bool updateRegion(const char* region)
+  {
+    reader_.reset_region(string_to_region(region));
+    return reader_.good();
+  }
+
   // read markers until reach the end of file
   int readMarkers(int m = 0, bool del = true) {
-    //int nc;
-    char* line = NULL;
-    
+    savvy::variant_vector<std::vector<float>> var;
+
     if ( del ) clear();
-    
+
     int mStart = nMarkers;
+
+    parseInds(reader_.samples_begin(), reader_.samples_end(), icols);
 
     //fprintf(stderr,"fVcf::readMarkers(%d) called",m);
 
-    while ( (line = (char*)tf.getLine()) != NULL ) {
-      //notice("bar");
-      //nc = tf.getLength();
-      //fprintf(stderr,"nMarkers=%d, line[0] = %c, icols.size() = %d, nc=%d\n",nMarkers,line[0],(int)icols.size(), nc);
-      if ( line[0] == '#' ) {
-	if ( strncmp(line,"#CHROM",6) == 0 ) {
-	  nInds = parseInds(line, icols);
-	}
-      }
-      else {
-	int cols2 = parseMarkers(line); 
-	//notice("cols2 = %d",cols2);
-	if ( cols2 >= 0 ) {
-	  if ( nInds != cols2 ) {
-	    error("fVcf::readMarkers() : Column size does not match : %d vs %d at marker %s", nInds, cols2, markers[markers.size()-1].c_str() );
-	    abort();
-	  }
-	  ++nMarkers;
-	  if ( ( m > 0 ) && ( m <= nMarkers - mStart ) ) break;
-	}
+    while ( glFlag ?  reader_ >> reinterpret_cast<savvy::dense_dosage_vector<float>&>(var) :  reader_ >> reinterpret_cast<savvy::dense_genotype_vector<float>&>(var) ) {
+      int cols2 = parseMarkers(var);
+      //notice("cols2 = %d",cols2);
+      if ( cols2 >= 0 ) {
+        if ( nInds != cols2 ) {
+          error("fVcf::readMarkers() : Column size does not match : %d vs %d at marker %s", nInds, cols2, markers[markers.size()-1].c_str() );
+          abort();
+        }
+        ++nMarkers;
+        if ( ( m > 0 ) && ( m <= nMarkers - mStart ) ) break;
       }
     }
     //notice("Returning %d",nMarkers-mStart);
     return ( nMarkers-mStart );
-  };
+  }
 
   /*
   // read markers until reach the end of file
@@ -1346,7 +1338,7 @@ public:
 */
 
   void close() {
-    tf.close();
+    //tf.close();
   }
 
   /*
@@ -1427,14 +1419,14 @@ public:
       //notice("fVcf::emAF() - r = %d, p = %lf",r,p);
 
       for(it = indices.begin(); it != indices.end(); ++it) {
-	i = 3*m*nInds + (*it)*3;
-	f0 = q * q * phredConv.phred2Err[PLs[i]];
-	f1 = 2. * p * q * phredConv.phred2Err[PLs[i+1]];
-	f2 = p * p * phredConv.phred2Err[PLs[i+2]];
-	fsum = f0+f1+f2;
-	post[c++] = f0/fsum;
-	sum += (post[c++] = f1/fsum);
-	sum += (2 * (post[c++] = f2/fsum));
+        i = 3*m*nInds + (*it)*3;
+        f0 = q * q * phredConv.phred2Err[PLs[i]];
+        f1 = 2. * p * q * phredConv.phred2Err[PLs[i+1]];
+        f2 = p * p * phredConv.phred2Err[PLs[i+2]];
+        fsum = f0+f1+f2;
+        post[c++] = f0/fsum;
+        sum += (post[c++] = f1/fsum);
+        sum += (2 * (post[c++] = f2/fsum));
       }
       p = sum / (2*n);
 
@@ -1474,7 +1466,7 @@ public:
     llk1 += p.second;
 
     //printf("%d\t%lf\t%lf\t%lf\n",m,llk0,llk1,llk1-llk0);
-    
+
     return( 2*(llk1 - llk0) );
   }
 };
@@ -1482,4 +1474,4 @@ public:
 const float fVcf::NAN_FLT = sqrtf(-1.);     // assign float  NAN value
 const double fVcf::NAN_DBL = sqrt(-1.);  // assign double NAN value
 
-#endif // __TABIXED_VCF_H
+#endif // __TABIXED_FVCF_H

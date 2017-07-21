@@ -21,7 +21,7 @@
 #include "GenomeSequence.h"
 #include "cdsStat.h"
 #include "ncStat.h"
-#include "bgzf.h"
+#include <htslib/bgzf.h>
 
 #define WINDOW_SIZE 65536
 
@@ -64,8 +64,8 @@ public:
   bool sepchr;
 
   static int const DEFAULT_UNIT = 10000L;
-  static double const DEFAULT_MIN = 1e-6;
-  static double const DEFAULT_MAX_MAF = 1;
+  constexpr static double const DEFAULT_MIN = 1e-6;
+  constexpr static double const DEFAULT_MAX_MAF = 1;
 
   pVPHArgs() :
     unit(DEFAULT_UNIT), verbose(false), ignoreFilter(false), ignoreMissing(false), includeMultiAllelic(false), minAC(0), minMAC(0), maxAC(INT_MAX), minMAF(DEFAULT_MIN), maxMAF(DEFAULT_MAX_MAF), minCallRate(DEFAULT_MIN), genoFlag(false), acFlag(false), anFlag(false), aldFlag(false), tstvFlag(false),sepchr(false)
@@ -392,6 +392,8 @@ int schr2nchr(const char* schr) {
 
 // variable threshold test
 int runConvert(int argc, char** argv) {
+  error("conversion temporarily disabled!");
+  return -1;
   // Parse the input arguments
   bool outvcf = false;
   bool outplink = false;
@@ -560,7 +562,7 @@ int runConvert(int argc, char** argv) {
   double mu, sigma, r2 = 0;
   do {
     if ( !loci.empty() ) {
-      tvcf.tf.updateRegion(loci.currentLocus().toString(), arg.sepchr);
+      tvcf.updateRegion(loci.currentLocus().toString());
       //notice("Extracing region %s..",loci.currentLocus().toString());
     }
 
@@ -665,7 +667,7 @@ int runConvert(int argc, char** argv) {
 	      else if ( outvcf ) {
 		//error("--outvcf is not implemented yet");
 		//fprintf(stderr,"foo %d\n",M);
-		tvcf.writeSubsetMarker(wf, tvcf.tf.peekLine());
+		tvcf.writeSubsetMarker(wf, ""); //tvcf.tf.peekLine()); TODO: Reimplement
 		//fprintf(stderr,"bar %d\n",M);
 		//if ( arg.verbose)
 		//fprintf(stderr,"fVcf::writeSubsetMarker() finished, M= %d",M);
@@ -944,7 +946,7 @@ int runIndexLD(int argc, char** argv) {
   tvcf.load(arg.vcf.c_str(), NULL, arg.field.c_str(), arg.rule.c_str(), !arg.ignoreFilter, arg.indf.empty() ? NULL : arg.indf.c_str());
   int n = tvcf.nInds;
 
-  tvcf.tf.updateRegion(indexRegion.c_str(), arg.sepchr);
+  tvcf.updateRegion(indexRegion.c_str());
 
   if ( tvcf.readMarkers(1) == 0 ) {
     error("Cannot find a SNP at marker position %s",index.c_str());
@@ -1008,7 +1010,7 @@ int runIndexLD(int argc, char** argv) {
   }
 
   notice("Retrieving the genomic region %s",arg.region.c_str());
-  tvcf.tf.updateRegion(arg.region.c_str(), arg.sepchr);
+  tvcf.updateRegion(arg.region.c_str());
   
   wFile wf(arg.outf.c_str());
   wf.printf("##INDEX=%s\n",index.c_str());

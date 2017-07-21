@@ -6,12 +6,12 @@
 #include <cstdlib>
 #include <cstdio>
 
-#include "bgzf.h"
+#include <htslib/bgzf.h>
 #include "tabix.h"
 
 #include "Error.h"
 
-// class to read tabixed 
+// class to read tabixed
 class pFile {
  protected:
   FILE *fp;
@@ -20,7 +20,7 @@ class pFile {
   int tid;
   int beg;
   int end;
-  int len;  
+  int len;
 
   std::string fname;
   std::string chrom;
@@ -62,7 +62,7 @@ class pFile {
   }
 
   // return 0 if not gzip, 1 if gz but not bgzf, 2 if bgzf, -1 if 10 bytes cannot be read
-  static int fileType(const char *fn) 
+  static int fileType(const char *fn)
   {
     FILE* fp;
     //fprintf(stderr,"foo\n");
@@ -70,7 +70,7 @@ class pFile {
     int n;
 
     if ( strcmp(fn,"-") == 0 ) { return 0; }
-    
+
     if ((fp = fopen(fn, "rb")) == NULL)
     {
         return -1;
@@ -78,11 +78,11 @@ class pFile {
     n = fread(buf, 1, 10, fp);
 
     //fprintf(stderr,"bar\n");
-    
+
     fclose(fp);
 
     if ( n!=10 ) return -1;
-    if ( !memcmp(magic, buf, 10) ) return 2;    
+    if ( !memcmp(magic, buf, 10) ) return 2;
     if ( !memcmp(magic, buf, 2) ) {
       return 1;
     }
@@ -106,7 +106,7 @@ class pFile {
       loadRegion();  // load the region right away
     }
   }
-  
+
  pFile() : head(false), iter(NULL), type(-1), line(NULL), idxconf(NULL) {
   }
 
@@ -151,7 +151,7 @@ class pFile {
     switch(type) {
     case 0:
       return fread(ptr, 1, count, fp);
-    case 1: 
+    case 1:
       return gzread(gf, ptr, count);
     case 2: // bgzipped files
       return bgzf_read(t->fp, ptr, count);
@@ -182,7 +182,7 @@ class pFile {
 	len = 0;
 	line = NULL;
       }
-      return line;      
+      return line;
       /*
       size_t tn;
       //if ( line == NULL ) line = new char[MAX_LINE_SIZE];
@@ -218,7 +218,7 @@ class pFile {
       if ( iter == NULL ) return NULL;
       line = (char*)ti_read(t, iter, &len);
       if ( head ) { // if reached the end of the header
-	if ( (int)(*line) != idxconf->meta_char ) { 
+	if ( (int)(*line) != idxconf->meta_char ) {
 	  //if ( iter != NULL ) ti_iter_destroy(iter); // close existing iterator
 	  head = false;
 	  loadRegion();
@@ -297,7 +297,7 @@ class pFile {
 	//ti_index_destroy(t->idx);
 	ti_close(t);
       }
-      idxconf = NULL; 
+      idxconf = NULL;
       t = NULL;
       iter = NULL;
       break;
@@ -314,7 +314,7 @@ class pFile {
     if (ti_lazy_index_load(t) < 0 ) {
       error("Failed to load the index file");
     }
-    idxconf = ti_get_conf(t->idx);  
+    idxconf = ti_get_conf(t->idx);
   }
 
   void loadRegion(bool sepchr = false) {
@@ -329,7 +329,7 @@ class pFile {
 	while ( (ichr = fname.find("chr",pos)) != std::string::npos ) {
 	  size_t idot = fname.find_first_of("-_./",ichr);
 	  std::string newchr = reg.substr(0,reg.find(':'));
-	  if ( idot == std::string::npos ) 
+	  if ( idot == std::string::npos )
 	    error("Cannot find '.','_','-', or '/' after chr in the filename with --sepchr option");
 	  newfname += (fname.substr(pos,ichr-pos) + "chr" + newchr);
 	  pos = idot;

@@ -30,7 +30,7 @@
 
 #include <stdint.h>
 #include "kstring.h"
-#include "bgzf.h"
+#include <htslib/bgzf.h>
 
 typedef int (*bi_fetch_f)(int l, const char *s, void *data);
 

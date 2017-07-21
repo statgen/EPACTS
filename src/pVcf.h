@@ -1,5 +1,5 @@
-#ifndef __TABIXED_VCF_H
-#define __TAXBIED_VCF_H
+#ifndef __TABIXED_PVCF_H
+#define __TABIXED_PVCF_H
 
 #include <iostream>
 #include <sstream>

@@ -40,8 +40,8 @@ public:
   bool sepchr;
 
   static int const DEFAULT_NSNPS = 10000L;
-  static double const DEFAULT_MIN_MAF = 1e-6;
-  static double const DEFAULT_MAX_MAF = 1;
+  constexpr static double const DEFAULT_MIN_MAF = 1e-6;
+  constexpr static double const DEFAULT_MAX_MAF = 1;
 
   pCHAPSArgs() :
     unit(DEFAULT_NSNPS), verbose(false), ignoreFilter(false), ignoreMissing(false), minAC(0), minMAC(0), maxAC(INT_MAX), minMAF(DEFAULT_MIN_MAF), maxMAF(DEFAULT_MAX_MAF), minCallRate(DEFAULT_MIN_MAF), sepchr(false)
@@ -129,6 +129,8 @@ int runPairHMM(int argc, char** argv) {
   if ( arg.vcf.empty() || arg.outf.empty()  ) {
     error("--vcf, --out are required parameters (--indf are also recommended)");
   }
+
+
 
   fVcf tvcf;
   tvcf.load(arg.vcf.c_str(), arg.region.c_str(), arg.field.c_str(), arg.rule.c_str(), !arg.ignoreFilter, arg.indf.empty() ? NULL : arg.indf.c_str());

@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <cstdarg>
 
-#include "bgzf.h"
+#include <htslib/bgzf.h>
 #include "Error.h"
 
 // class to read tabixed 

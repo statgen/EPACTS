@@ -83,8 +83,8 @@ public:
   double maxP;
 
   static int const DEFAULT_UNIT = 10000L;
-  static double const DEFAULT_MIN = 1e-6;
-  static double const DEFAULT_MAX = 1;
+  constexpr static double const DEFAULT_MIN = 1e-6;
+  constexpr static double const DEFAULT_MAX = 1;
   static int const DEFAULT_MIN_MAC = 1;
   static int const DEFAULT_MAX_MAC = 1000000000;
   static int const DEFAULT_MAX_PERM = 10000000;
@@ -114,8 +114,8 @@ public:
   static const int N_MAGIC = 8;
   static const char *magicKin;
   static const char *magicEig;
-  static const double ZEPS = 1e-10;
-  static const double TOL = 1e-6;
+  constexpr static const double ZEPS = 1e-10;
+  constexpr static const double TOL = 1e-6;
 
   static bool writeIDs(wFile& wf, std::vector<std::string>& ids) {
     char* p = (char*) malloc(65536); // maximum ID length is 64k
