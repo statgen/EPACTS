@@ -41,7 +41,7 @@ my $callregion = "";
 my $intervalList = "";
 my $maxP = 1;
 my $compact = "";
-my $ref = "";
+my $ref = $defaultfasta;
 
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
@@ -248,7 +248,7 @@ die "ERROR: Cannot open $vcf.tbi. The VCF file must be tabixed\n" unless ( -s "$
 
 #die "ERROR in installing R packages\n" if ( ! &installPackages() );
 
-my ($rVcfIds,$rhPhes,$rhCovs,$rPnames) = &readPedVcfMulti($epactsdir,$ped,$vcf,$missing,\@phenos,\@covs,\@condsnps,$field);
+my ($rVcfIds,$rhPhes,$rhCovs,$rPnames) = &readPedVcfMulti($epactsdir,$ped,$vcf,$missing,\@phenos,\@covs,\@condsnps,$field,$pass);
 my @vcfIds = @{$rVcfIds};
 my %hPhes = %{$rhPhes};
 my %hCovs = %{$rhCovs};

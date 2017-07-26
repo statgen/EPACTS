@@ -20,7 +20,7 @@ my $region = "";
 my $groupFlag = "";
 my $ignoreMAF = "";
 my $labelf = "";
-my $ref = "";
+my $ref = $defaultfasta;
 my %nchrs = ();
 
 wGetOptions(

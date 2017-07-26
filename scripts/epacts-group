@@ -6,7 +6,7 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs parsePheno readPedVcf $binR $binRscript $binrm $binmake installPackages forkExecWait getMosixCmd initRef);
+use epacts qw(@chrs @szchrs parsePheno readPedVcf $binR $binRscript $binrm $binmake installPackages forkExecWait getMosixCmd initRef $defaultfasta);
 
 my $vcf = "";
 my $pheno = "";
@@ -41,7 +41,7 @@ my $restart;
 my $binaryFlag = 0;
 my $vntFlag = 0;
 my @condsnps = ();
-my $ref = "";
+my $ref = $defaultfasta;
 
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
@@ -225,7 +225,7 @@ my ($betaA,$betaB) = split(/,/,$beta);
 die "ERROR: Cannot open $vcf\n" unless ( -s $vcf );
 die "ERROR: Cannot open $vcf.tbi. The VCF file must be tabixed\n" unless ( -s "$vcf.tbi" );
 
-my ($rVcfIds,$rhPhes,$rhCovs,$isBinary) = &readPedVcf($epactsdir,$ped,$vcf,$missing,$pheno,\@covs,\@condsnps,$field);
+my ($rVcfIds,$rhPhes,$rhCovs,$isBinary) = &readPedVcf($epactsdir,$ped,$vcf,$missing,$pheno,\@covs,\@condsnps,$field,0);
 my @vcfIds = @{$rVcfIds};
 my %hPhes = %{$rhPhes};
 my %hCovs = %{$rhCovs};
