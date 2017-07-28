@@ -25,6 +25,11 @@
 
 #define WINDOW_SIZE 65536
 
+typedef savvy::dense_genotype_vector<float>                   gt_vec;
+typedef savvy::dense_dosage_vector<float>                     ds_vec;
+typedef savvy::dense_genotype_likelihoods_vector<float>       gl_vec;
+typedef savvy::dense_phred_genotype_likelihoods_vector<float> pl_vec;
+
 class pVPHArgs {
 public:
   // VCF-related string arguments
@@ -69,9 +74,10 @@ public:
 
   pVPHArgs() :
     unit(DEFAULT_UNIT), verbose(false), ignoreFilter(false), ignoreMissing(false), includeMultiAllelic(false), minAC(0), minMAC(0), maxAC(INT_MAX), minMAF(DEFAULT_MIN), maxMAF(DEFAULT_MAX_MAF), minCallRate(DEFAULT_MIN), genoFlag(false), acFlag(false), anFlag(false), aldFlag(false), tstvFlag(false),sepchr(false)
-    {}
+  {}
 };
 
+template <typename VecType>
 class vcfHashKey {
 public:
   std::string genos;
@@ -80,18 +86,18 @@ public:
   int ald;
   int tstv;
 
-  vcfHashKey(fVcf& vcf, int i, bool genoFlag, bool acFlag, bool anFlag, bool aldFlag, bool tstvFlag, bool ignoreMissing)  {
+  vcfHashKey(fVcf<VecType>& vcf, int i, bool genoFlag, bool acFlag, bool anFlag, bool aldFlag, bool tstvFlag, bool ignoreMissing)  {
     if ( genoFlag ) {
       float g;
       genos.resize(vcf.nInds);
       for(int j=0; j < vcf.nInds; ++j) {
-	g = vcf.genos[i * vcf.nInds + j];
-	if ( std::isnan(g) ) {
-	  genos[j] = ignoreMissing ? '0' : '.';
-	}
-	else {
-	  genos[j] = (int)(g+.5) + '0';
-	}
+        g = vcf.genos[i * vcf.nInds + j];
+        if ( std::isnan(g) ) {
+          genos[j] = ignoreMissing ? '0' : '.';
+        }
+        else {
+          genos[j] = (int)(g+.5) + '0';
+        }
       }
     }
     if ( acFlag ) { ac = vcf.sumAlleles[i]; }
@@ -103,52 +109,52 @@ public:
 
       if ( aldFlag ) { ald = (l-i_sl-i_sl+i_us); }
       if ( tstvFlag ) {
-	if ( ( i_sl-i_us-1 == 1 ) && ( l-i_sl-1 == 1 ) ) {
-	  tstv = determineTsTv(vcf.markers[i][i_us+1],vcf.markers[i][i_sl+1]);
-	}
-	else {
-	  tstv = -1;
-	}
+        if ( ( i_sl-i_us-1 == 1 ) && ( l-i_sl-1 == 1 ) ) {
+          tstv = determineTsTv(vcf.markers[i][i_us+1],vcf.markers[i][i_sl+1]);
+        }
+        else {
+          tstv = -1;
+        }
       }
     }
   }
 
   static int determineTsTv(char ref, char alt) {
     switch(ref) {
-    case 'A':
-      switch(alt) {
-      case 'A': return -1;
-      case 'C': return 0;
-      case 'G': return 1;
-      case 'T': return 0;
-      default: return -1;
-      }
-    case 'C':
-      switch(alt) {
-      case 'A': return 0;
-      case 'C': return -1;
-      case 'G': return 0;
-      case 'T': return 1;
-      default: return -1;
-      }
-    case 'G':
-      switch(alt) {
-      case 'A': return 1;
-      case 'C': return 0;
-      case 'G': return -1;
-      case 'T': return 0;
-      default: return -1;
-      }
-    case 'T':
-      switch(alt) {
-      case 'A': return 0;
-      case 'C': return 1;
-      case 'G': return 0;
-      case 'T': return -1;
-      default: return -1;
-      }
-    default:
-      return -1;
+      case 'A':
+        switch(alt) {
+          case 'A': return -1;
+          case 'C': return 0;
+          case 'G': return 1;
+          case 'T': return 0;
+          default: return -1;
+        }
+      case 'C':
+        switch(alt) {
+          case 'A': return 0;
+          case 'C': return -1;
+          case 'G': return 0;
+          case 'T': return 1;
+          default: return -1;
+        }
+      case 'G':
+        switch(alt) {
+          case 'A': return 1;
+          case 'C': return 0;
+          case 'G': return -1;
+          case 'T': return 0;
+          default: return -1;
+        }
+      case 'T':
+        switch(alt) {
+          case 'A': return 0;
+          case 'C': return 1;
+          case 'G': return 0;
+          case 'T': return -1;
+          default: return -1;
+        }
+      default:
+        return -1;
     }
   }
 
@@ -182,24 +188,25 @@ public:
     if ( tabFlag ) wf.printf("\t");
     if ( aldFlag ) { wf.printf("%d",ald); tabFlag = true; }
     if ( tabFlag ) wf.printf("\t");
-    if ( tstvFlag ) { 
+    if ( tstvFlag ) {
       switch(tstv) {
-      case 0:
-	wf.printf("TS");
-	break;
-      case 1:
-	wf.printf("TV");
-	break;
-      default:
-	wf.printf("OTHER");
-	break;
+        case 0:
+          wf.printf("TS");
+          break;
+        case 1:
+          wf.printf("TV");
+          break;
+        default:
+          wf.printf("OTHER");
+          break;
       }
       tabFlag = true;
     }
   }
 };
 
-void hashBit(fVcf& vcf, unsigned char* bytes, int isnp)  {
+template <typename VecType>
+void hashBit(fVcf<VecType>& vcf, unsigned char* bytes, int isnp)  {
   // we fill from the higher order
   float g;
   int nbytes = (vcf.nInds + 3) / 4;
@@ -222,24 +229,24 @@ int runSummary(int argc, char** argv) {
   bool nonsnps = false;
 
   BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("VCF Input Options")
-    LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("region",&arg.region)
-    LONG_STRINGPARAMETER("indf",&arg.indf)
-    LONG_STRINGPARAMETER("rule",&arg.rule)
-    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-    LONG_STRINGPARAMETER("scoref",&arg.scoref)
-    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_DOUBLEPARAMETER("minScore",&minScore)
-    LONG_INTPARAMETER("minAC",&arg.minAC)
-    LONG_INTPARAMETER("maxAC",&arg.maxAC)
-    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-    LONG_PARAMETER("full-afs",&fullAFS)
-    LONG_PARAMETER("nonsnps",&nonsnps)
+      LONG_PARAMETER_GROUP("VCF Input Options")
+      LONG_STRINGPARAMETER("vcf",&arg.vcf)
+      LONG_STRINGPARAMETER("region",&arg.region)
+      LONG_STRINGPARAMETER("indf",&arg.indf)
+      LONG_STRINGPARAMETER("rule",&arg.rule)
+      LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+      LONG_STRINGPARAMETER("scoref",&arg.scoref)
+      LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+      LONG_DOUBLEPARAMETER("minScore",&minScore)
+      LONG_INTPARAMETER("minAC",&arg.minAC)
+      LONG_INTPARAMETER("maxAC",&arg.maxAC)
+      LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+      LONG_PARAMETER("full-afs",&fullAFS)
+      LONG_PARAMETER("nonsnps",&nonsnps)
 
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out",&arg.outf)
-    LONG_PARAMETER("verbose",&arg.verbose)
+      LONG_PARAMETER_GROUP("Output Options")
+      LONG_STRINGPARAMETER("out",&arg.outf)
+      LONG_PARAMETER("verbose",&arg.verbose)
   END_LONG_PARAMETERS();
 
   pl.Add(new LongParameters("Available Options", longParameters));
@@ -251,7 +258,7 @@ int runSummary(int argc, char** argv) {
     error("--vcf, --out are required parameters (--indf are also recommended)");
   }
 
-  fVcf tvcf;
+  fVcf<gt_vec> tvcf;
   tvcf.load(arg.vcf.c_str(), arg.region.c_str(), "GT", arg.rule.c_str(), !arg.ignoreFilter, arg.indf.empty() ? NULL : arg.indf.c_str());
   int n = tvcf.nInds;
   int i = 0, m = 0, j = 0;
@@ -274,65 +281,65 @@ int runSummary(int argc, char** argv) {
     for(i=0, m=0; i < tvcf.nMarkers; ++i) { // for each marker
       af = tvcf.alleleFreq(i);
       maf = af > 0.5 ? 1-af : af;
-      if ( ( maf >= arg.minMAF ) && 
-	   ( tvcf.callRate(i) >= arg.minCallRate ) &&
-	   ( tvcf.sumAlleles[i] >= arg.minAC ) &&
-	   ( tvcf.sumAlleles[i] <= arg.maxAC ) &&
-	   ( arg.scoref.empty() || ( gScore.baseScore(tvcf.chroms[i].c_str(), tvcf.pos1s[i]) >= minScore ) )
-	   )
-     { // if pass the criteria
-       int vt = 0; // 0 OTHER 1 Ts 2 Tv
-       int frq = 0;  // 0 COMMON 1 SING 2 DBL
-       if ( ( tvcf.refs[i].length() == 1 ) && ( tvcf.alts[i].length() == 1 ) ) {
-	 switch(tvcf.refs[i][0]) {
-	 case 'A':
-	   if ( tvcf.alts[i][0] == 'G' ) { vt = 1; }
-	   else if ( tvcf.alts[i][0] == 'C' ) { vt = 2; }
-	   else if ( tvcf.alts[i][0] == 'T' ) { vt = 2; }
-	   break;
-	 case 'C':
-	   if ( tvcf.alts[i][0] == 'T' ) { vt = 1; }
-	   else if ( tvcf.alts[i][0] == 'A' ) { vt = 2; }
-	   else if ( tvcf.alts[i][0] == 'G' ) { vt = 2; }
-	   break;
-	 case 'G':
-	   if ( tvcf.alts[i][0] == 'A' ) { vt = 1; }
-	   else if ( tvcf.alts[i][0] == 'C' ) { vt = 2; }
-	   else if ( tvcf.alts[i][0] == 'T' ) { vt = 2; }
-	   break;
-	 case 'T':
-	   if ( tvcf.alts[i][0] == 'C' ) { vt = 1; }
-	   else if ( tvcf.alts[i][0] == 'A' ) { vt = 2; }
-	   else if ( tvcf.alts[i][0] == 'G' ) { vt = 2; }
-	   break;
-	 }
-       }
+      if ( ( maf >= arg.minMAF ) &&
+           ( tvcf.callRate(i) >= arg.minCallRate ) &&
+           ( tvcf.sumAlleles[i] >= arg.minAC ) &&
+           ( tvcf.sumAlleles[i] <= arg.maxAC ) &&
+           ( arg.scoref.empty() || ( gScore.baseScore(tvcf.chroms[i].c_str(), tvcf.pos1s[i]) >= minScore ) )
+        )
+      { // if pass the criteria
+        int vt = 0; // 0 OTHER 1 Ts 2 Tv
+        int frq = 0;  // 0 COMMON 1 SING 2 DBL
+        if ( ( tvcf.refs[i].length() == 1 ) && ( tvcf.alts[i].length() == 1 ) ) {
+          switch(tvcf.refs[i][0]) {
+            case 'A':
+              if ( tvcf.alts[i][0] == 'G' ) { vt = 1; }
+              else if ( tvcf.alts[i][0] == 'C' ) { vt = 2; }
+              else if ( tvcf.alts[i][0] == 'T' ) { vt = 2; }
+              break;
+            case 'C':
+              if ( tvcf.alts[i][0] == 'T' ) { vt = 1; }
+              else if ( tvcf.alts[i][0] == 'A' ) { vt = 2; }
+              else if ( tvcf.alts[i][0] == 'G' ) { vt = 2; }
+              break;
+            case 'G':
+              if ( tvcf.alts[i][0] == 'A' ) { vt = 1; }
+              else if ( tvcf.alts[i][0] == 'C' ) { vt = 2; }
+              else if ( tvcf.alts[i][0] == 'T' ) { vt = 2; }
+              break;
+            case 'T':
+              if ( tvcf.alts[i][0] == 'C' ) { vt = 1; }
+              else if ( tvcf.alts[i][0] == 'A' ) { vt = 2; }
+              else if ( tvcf.alts[i][0] == 'G' ) { vt = 2; }
+              break;
+          }
+        }
 
-       frq = (tvcf.sumAlleles[i] == 1) ? 1 : (tvcf.sumAlleles[i] == 2) ? 2 : 0;
-       for(j=0; j < n; ++j) {
-	 float v = tvcf.genos[i*n + j];
-	 if ( !std::isnan(v) ) {
-	   int g = (v == 0 ? 0 : ( v == 1 ) ? 1 : 2 );
-	   ++cnts[g * 3 + vt + j * 22];
-	   if ( ( frq > 0 ) && ( g > 0 ) ) {
-	     ++cnts[6 + frq * 3 + vt + j * 22]; 
-	   }
-	   if ( g > 0 ) {
-	     if ( af >= 0.005 ) {
-	       ++cnts[18 + vt + j * 22]; 
-	     }
-	     else {
-	       ++cnts[15 + vt + j * 22]; 
-	     }
-	   }
-	   if ( fullAFS ) ++acnts[j*(n+n+1)*3 + (int)(tvcf.sumAlleles[i])*3 + g];
-	 }
-	 else {
-	   ++cnts[21 + j * 22];
-	 }
-       }
-       ++m;
-     }
+        frq = (tvcf.sumAlleles[i] == 1) ? 1 : (tvcf.sumAlleles[i] == 2) ? 2 : 0;
+        for(j=0; j < n; ++j) {
+          float v = tvcf.genos[i*n + j];
+          if ( !std::isnan(v) ) {
+            int g = (v == 0 ? 0 : ( v == 1 ) ? 1 : 2 );
+            ++cnts[g * 3 + vt + j * 22];
+            if ( ( frq > 0 ) && ( g > 0 ) ) {
+              ++cnts[6 + frq * 3 + vt + j * 22];
+            }
+            if ( g > 0 ) {
+              if ( af >= 0.005 ) {
+                ++cnts[18 + vt + j * 22];
+              }
+              else {
+                ++cnts[15 + vt + j * 22];
+              }
+            }
+            if ( fullAFS ) ++acnts[j*(n+n+1)*3 + (int)(tvcf.sumAlleles[i])*3 + g];
+          }
+          else {
+            ++cnts[21 + j * 22];
+          }
+        }
+        ++m;
+      }
     }
   }
 
@@ -365,11 +372,11 @@ int runSummary(int argc, char** argv) {
       acf.printf("\t%d",j);
     }
     acf.printf("\n");
-    
+
     for(j=0; j < n; ++j) {
       acf.printf("%s",tvcf.inds[j].c_str());
       for(m=0; m <= n+n; ++m) {
-	acf.printf("\t%d,%d,%d",acnts[j*(n+n+1)*3+m*3+0],acnts[j*(n+n+1)*3+m*3+1],acnts[j*(n+n+1)*3+m*3+2]);
+        acf.printf("\t%d,%d,%d",acnts[j*(n+n+1)*3+m*3+0],acnts[j*(n+n+1)*3+m*3+1],acnts[j*(n+n+1)*3+m*3+2]);
       }
       acf.printf("\n");
     }
@@ -390,67 +397,10 @@ int schr2nchr(const char* schr) {
   else { error("Cannot convert chromosome %s into PLINK format",schr); return 0; }
 }
 
-// variable threshold test
-int runConvert(int argc, char** argv) {
-  error("conversion temporarily disabled!");
-  return -1;
-  // Parse the input arguments
-  bool outvcf = false;
-  bool outplink = false;
-  bool outmatrix = true;
-  double maxR2 = 1;
-  int winR2 = 0;
-  pVPHArgs arg;
-  arg.field = "GT";
-  std::string markerId;
-  ParameterList pl;
-
-  BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("VCF Input Options")
-    LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("indf",&arg.indf)
-    LONG_STRINGPARAMETER("bedf",&arg.bedf)
-    LONG_STRINGPARAMETER("field",&arg.field)
-    LONG_STRINGPARAMETER("region",&arg.region)
-    LONG_STRINGPARAMETER("marker-id",&markerId)
-    LONG_STRINGPARAMETER("rule",&arg.rule)
-    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
-    LONG_INTPARAMETER("minMAC",&arg.minMAC)
-    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-    LONG_PARAMETER("sepchr",&arg.sepchr)
-
-    LONG_PARAMETER_GROUP("LD pruning Options")
-    LONG_INTPARAMETER("win-r2",&winR2)
-    LONG_DOUBLEPARAMETER("max-r2",&maxR2)
-
-    LONG_PARAMETER_GROUP("Output format")
-    EXCLUSIVE_PARAMETER("outvcf",&outvcf)
-    EXCLUSIVE_PARAMETER("outplink",&outplink)
-    EXCLUSIVE_PARAMETER("outmatrix",&outmatrix)
-
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out",&arg.outf)
-    LONG_PARAMETER("verbose",&arg.verbose)
-  END_LONG_PARAMETERS();
-
-  pl.Add(new LongParameters("Available Options", longParameters));
-  pl.Read(argc,argv);
-  pl.Status();
-
- // sanity check of input arguments
-  if ( arg.vcf.empty() || arg.outf.empty()  ) {
-    error("--vcf, --out are required parameters (--indf are also recommended)");
-  }
-
-  if ( !( outvcf || outplink || outmatrix ) ) {
-    warning("Default option --outmatrix was turned off. Turning in again..");
-    outmatrix = true;
-  }
-
+template <typename VecType>
+int runConvert(pVPHArgs& arg, const std::string& markerId, double maxR2, int winR2, bool outvcf, bool outplink, bool outmatrix) {
   bool gtFlag = (arg.field == "GT");
-  fVcf tvcf;
+  fVcf<VecType> tvcf;
 
   if ( ( !arg.region.empty() ) && ( !markerId.empty() ) ) {
     error("--region and --marker-id cannot be combined together");
@@ -532,16 +482,16 @@ int runConvert(int argc, char** argv) {
     std::vector<std::string> tokens;
     while( (line = bedf.getLine()) != NULL ) {
       pFile::tokenizeLine(line, " \t\r\n", tokens);
-      if ( tokens.size() < 3 ) 
-	error("bed file must have three columns");
-      
+      if ( tokens.size() < 3 )
+        error("bed file must have three columns");
+
       if ( tokens[0].compare(0,3,"chr") == 0 ) {
-	tokens[0] = tokens[0].substr(3);
+        tokens[0] = tokens[0].substr(3);
       }
-      
+
       int beg1 = atoi(tokens[1].c_str()) + 1;
       int end0 = atoi(tokens[2].c_str());
-      
+
       loci.add(tokens[0].c_str(),beg1,end0);
     }
     loci.resolveOverlaps(); // make the bed files non-overlapping
@@ -568,114 +518,114 @@ int runConvert(int argc, char** argv) {
 
     for(m = 0; tvcf.readMarkers(arg.unit); ) {
       if ( M / 10000 < (M + tvcf.nMarkers) / 10000 ) {
-	fprintf(stderr,"Reading %d of %d markers and writing %d markers across %d individuals..\n", m, M + tvcf.nMarkers, nout, tvcf.nInds);
+        fprintf(stderr,"Reading %d of %d markers and writing %d markers across %d individuals..\n", m, M + tvcf.nMarkers, nout, tvcf.nInds);
       }
       M += tvcf.nMarkers;
       //if ( ( arg.unit > 1 ) || ( M % 10000 == 0 ) )
       for(i=0; i < tvcf.nMarkers; ++i) { // for each marker
-	af = tvcf.alleleFreq(i);
-	maf = af > 0.5 ? 1-af : af;
-	if ( maf < 0 ) maf = 0;
-	mu = 2*af;
-	sigma = tvcf.alleleSD(i,true);
+        af = tvcf.alleleFreq(i);
+        maf = af > 0.5 ? 1-af : af;
+        if ( maf < 0 ) maf = 0;
+        mu = 2*af;
+        sigma = tvcf.alleleSD(i,true);
 
-	if ( !markerIdRef.empty() ) {
-	  if ( ( tvcf.refs[i] != markerIdRef ) || ( tvcf.alts[i] != markerIdAlt ) ) {
-	    continue;
-	  }
-	}
+        if ( !markerIdRef.empty() ) {
+          if ( ( tvcf.refs[i] != markerIdRef ) || ( tvcf.alts[i] != markerIdAlt ) ) {
+            continue;
+          }
+        }
 
-	if ( ( maf >= arg.minMAF ) && 
-	     ( tvcf.callRate(i) >= arg.minCallRate ) &&
-	     ( tvcf.sumAlleles[i] >= arg.minAC ) &&
-	     ( tvcf.sumAlleles[i] <= arg.maxAC ) )
-	  { // if pass the criteria
-	    if ( winR2 > 0 ) { 
-	      // fill the genotype matrix
-	      int offset = (m % winR2) * n;
-	      for(j=0; j < n; ++j) {
-		geno = tvcf.genos[j + n*i];
-		if ( std::isnan(geno) ) {
-		  r2G[offset+j] = 0;
-		}
-		else {
-		  r2G[offset+j] = (geno-mu)/sigma;
-		}
-	      }
-	      // calculate sliding-window r2
-	      r2 = 0;
-	      for(j=0; j < winR2; ++j) {
-		if ( ( r2P[j] ) && ( j != (m % winR2) ) ) {
-		  double r = 0;
-		  for(k=0; k < n; ++k) {
-		    r += ((r2G[offset+k] * r2G[j*n + k])/n);
-		  }
-		  if ( r*r > r2 ) r2 = r*r;
-		}
-	      }
-	      if ( r2 < maxR2 ) { r2P[m % winR2] = true; }
-	      else { r2P[m % winR2] = false; }
-	      //fprintf(stderr,"r2=%lf\n",r2);
-	    }
+        if ( ( maf >= arg.minMAF ) &&
+             ( tvcf.callRate(i) >= arg.minCallRate ) &&
+             ( tvcf.sumAlleles[i] >= arg.minAC ) &&
+             ( tvcf.sumAlleles[i] <= arg.maxAC ) )
+        { // if pass the criteria
+          if ( winR2 > 0 ) {
+            // fill the genotype matrix
+            int offset = (m % winR2) * n;
+            for(j=0; j < n; ++j) {
+              geno = tvcf.genos[j + n*i];
+              if ( std::isnan(geno) ) {
+                r2G[offset+j] = 0;
+              }
+              else {
+                r2G[offset+j] = (geno-mu)/sigma;
+              }
+            }
+            // calculate sliding-window r2
+            r2 = 0;
+            for(j=0; j < winR2; ++j) {
+              if ( ( r2P[j] ) && ( j != (m % winR2) ) ) {
+                double r = 0;
+                for(k=0; k < n; ++k) {
+                  r += ((r2G[offset+k] * r2G[j*n + k])/n);
+                }
+                if ( r*r > r2 ) r2 = r*r;
+              }
+            }
+            if ( r2 < maxR2 ) { r2P[m % winR2] = true; }
+            else { r2P[m % winR2] = false; }
+            //fprintf(stderr,"r2=%lf\n",r2);
+          }
 
-	    if ( ( winR2 == 0 ) || ( r2P[m % winR2] ) ) {
-	      if ( outplink ) {
-		//error("--outplink is not implemented yet");
-		for(j=0; j < n; ++j) {
-		  geno = tvcf.genos[j + n*i];
-		  ngeno = std::isnan(geno) ? 0 : ((int)floor(geno)+1);
-		  switch(ngeno) {
-		  case 0:
-		    genos[j/4] |=  (0x1 << ((j%4)*2));
-		    break;
-		  case 1:
-		    genos[j/4] |=  (0x0 << ((j%4)*2));
-		    break;
-		  case 2:
-		    genos[j/4] |=  (0x2 << ((j%4)*2));
-		    break;
-		  case 3:
-		    genos[j/4] |=  (0x3 << ((j%4)*2));
-		    break;
-		  default:
-		    warning("Cannot correctly parse non-biallelic SNP, treating as HOMALT");
-		    genos[j/4] |=  (0x3 << ((j%4)*2));
-		  }
-		}
-		wf.write(genos,nbytes);
-		memset(genos,0,nbytes);
-		bimf->printf("%d\t%s\t0\t%d\t%s\t%s\n",schr2nchr(tvcf.chroms[i].c_str()),tvcf.markers[i].c_str(),tvcf.pos1s[i],tvcf.refs[i].c_str(),tvcf.alts[i].c_str());
-	      }
-	      else if ( outmatrix ) {
-		wf.printf("%s",tvcf.markers[i].c_str());
-		for(j=0; j < n; ++j) {
-		  geno = tvcf.genos[j + n*i];
-		  if ( std::isnan(geno) ) {
-		    wf.printf("\tNA");
-		  }
-		  else {
-		    if ( gtFlag ) {
-		      wf.printf("\t%d",(int)floor(geno));
-		    }
-		    else {
-		      wf.printf("\t%.3lf",geno);
-		    }
-		  }
-		}
-		wf.printf("\n");
-	      }
-	      else if ( outvcf ) {
-		//error("--outvcf is not implemented yet");
-		//fprintf(stderr,"foo %d\n",M);
-		tvcf.writeSubsetMarker(wf, ""); //tvcf.tf.peekLine()); TODO: Reimplement
-		//fprintf(stderr,"bar %d\n",M);
-		//if ( arg.verbose)
-		//fprintf(stderr,"fVcf::writeSubsetMarker() finished, M= %d",M);
-	      }
-	      ++nout;
-	    }
-	    ++m;
-	  }
+          if ( ( winR2 == 0 ) || ( r2P[m % winR2] ) ) {
+            if ( outplink ) {
+              //error("--outplink is not implemented yet");
+              for(j=0; j < n; ++j) {
+                geno = tvcf.genos[j + n*i];
+                ngeno = std::isnan(geno) ? 0 : ((int)floor(geno)+1);
+                switch(ngeno) {
+                  case 0:
+                    genos[j/4] |=  (0x1 << ((j%4)*2));
+                    break;
+                  case 1:
+                    genos[j/4] |=  (0x0 << ((j%4)*2));
+                    break;
+                  case 2:
+                    genos[j/4] |=  (0x2 << ((j%4)*2));
+                    break;
+                  case 3:
+                    genos[j/4] |=  (0x3 << ((j%4)*2));
+                    break;
+                  default:
+                    warning("Cannot correctly parse non-biallelic SNP, treating as HOMALT");
+                    genos[j/4] |=  (0x3 << ((j%4)*2));
+                }
+              }
+              wf.write(genos,nbytes);
+              memset(genos,0,nbytes);
+              bimf->printf("%d\t%s\t0\t%d\t%s\t%s\n",schr2nchr(tvcf.chroms[i].c_str()),tvcf.markers[i].c_str(),tvcf.pos1s[i],tvcf.refs[i].c_str(),tvcf.alts[i].c_str());
+            }
+            else if ( outmatrix ) {
+              wf.printf("%s",tvcf.markers[i].c_str());
+              for(j=0; j < n; ++j) {
+                geno = tvcf.genos[j + n*i];
+                if ( std::isnan(geno) ) {
+                  wf.printf("\tNA");
+                }
+                else {
+                  if ( gtFlag ) {
+                    wf.printf("\t%d",(int)floor(geno));
+                  }
+                  else {
+                    wf.printf("\t%.3lf",geno);
+                  }
+                }
+              }
+              wf.printf("\n");
+            }
+            else if ( outvcf ) {
+              //error("--outvcf is not implemented yet");
+              //fprintf(stderr,"foo %d\n",M);
+              tvcf.writeSubsetMarker(wf, ""); //tvcf.tf.peekLine()); TODO: Reimplement
+              //fprintf(stderr,"bar %d\n",M);
+              //if ( arg.verbose)
+              //fprintf(stderr,"fVcf::writeSubsetMarker() finished, M= %d",M);
+            }
+            ++nout;
+          }
+          ++m;
+        }
       }
     }
   }
@@ -689,50 +639,82 @@ int runConvert(int argc, char** argv) {
   }
   return 0;
 }
-
 // variable threshold test
-int runPairLD(int argc, char** argv) {
-  double minR2 = 1;
-  int winR2 = 1000;
+int runConvert(int argc, char** argv) {
+  error("conversion temporarily disabled!");
+  return -1;
+  // Parse the input arguments
+  bool outvcf = false;
+  bool outplink = false;
+  bool outmatrix = true;
+  double maxR2 = 1;
+  int winR2 = 0;
   pVPHArgs arg;
-  bool ignorePhase = false;
   arg.field = "GT";
+  std::string markerId;
   ParameterList pl;
 
   BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("VCF Input Options")
-    LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("indf",&arg.indf)
-    LONG_STRINGPARAMETER("field",&arg.field)
-    LONG_STRINGPARAMETER("region",&arg.region)
-    LONG_STRINGPARAMETER("rule",&arg.rule)
-    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
-    LONG_INTPARAMETER("minMAC",&arg.minMAC)
-    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-    LONG_PARAMETER("ignorePhase",&ignorePhase)
+      LONG_PARAMETER_GROUP("VCF Input Options")
+      LONG_STRINGPARAMETER("vcf",&arg.vcf)
+      LONG_STRINGPARAMETER("indf",&arg.indf)
+      LONG_STRINGPARAMETER("bedf",&arg.bedf)
+      LONG_STRINGPARAMETER("field",&arg.field)
+      LONG_STRINGPARAMETER("region",&arg.region)
+      LONG_STRINGPARAMETER("marker-id",&markerId)
+      LONG_STRINGPARAMETER("rule",&arg.rule)
+      LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+      LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
+      LONG_INTPARAMETER("minMAC",&arg.minMAC)
+      LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+      LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+      LONG_PARAMETER("sepchr",&arg.sepchr)
 
-    LONG_PARAMETER_GROUP("LD pruning Options")
-    LONG_INTPARAMETER("win-r2",&winR2)
-    LONG_DOUBLEPARAMETER("min-r2",&minR2)
+      LONG_PARAMETER_GROUP("LD pruning Options")
+      LONG_INTPARAMETER("win-r2",&winR2)
+      LONG_DOUBLEPARAMETER("max-r2",&maxR2)
 
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out",&arg.outf)
-    LONG_PARAMETER("verbose",&arg.verbose)
+      LONG_PARAMETER_GROUP("Output format")
+      EXCLUSIVE_PARAMETER("outvcf",&outvcf)
+      EXCLUSIVE_PARAMETER("outplink",&outplink)
+      EXCLUSIVE_PARAMETER("outmatrix",&outmatrix)
+
+      LONG_PARAMETER_GROUP("Output Options")
+      LONG_STRINGPARAMETER("out",&arg.outf)
+      LONG_PARAMETER("verbose",&arg.verbose)
   END_LONG_PARAMETERS();
 
   pl.Add(new LongParameters("Available Options", longParameters));
   pl.Read(argc,argv);
   pl.Status();
 
- // sanity check of input arguments
+  // sanity check of input arguments
   if ( arg.vcf.empty() || arg.outf.empty()  ) {
     error("--vcf, --out are required parameters (--indf are also recommended)");
   }
 
+  if ( !( outvcf || outplink || outmatrix ) ) {
+    warning("Default option --outmatrix was turned off. Turning in again..");
+    outmatrix = true;
+  }
+
+  if (arg.field == "GT") return runConvert<gt_vec>(arg, markerId, maxR2, winR2, outvcf, outplink, outmatrix);
+  else if (arg.field == "PL") return runConvert<pl_vec>(arg, markerId, maxR2, winR2, outvcf, outplink, outmatrix);
+  else if (arg.field == "GL") return runConvert<gl_vec>(arg, markerId, maxR2, winR2, outvcf, outplink, outmatrix);
+  else if (arg.field == "DS" || arg.field == "EC") return runConvert<ds_vec>(arg, markerId, maxR2, winR2, outvcf, outplink, outmatrix);
+  else
+  {
+    error("%s not supported", arg.field.c_str());
+    return -1;
+  }
+
+}
+
+template <typename VecType>
+int runPairLD(const pVPHArgs& arg, double minR2, int winR2, bool ignorePhase)
+{
   bool gtFlag = (arg.field == "GT");
-  fVcf tvcf;
+  fVcf<VecType> tvcf;
 
   tvcf.load(arg.vcf.c_str(), arg.region.c_str(), arg.field.c_str(), arg.rule.c_str(), !arg.ignoreFilter, arg.indf.empty() ? NULL : arg.indf.c_str());
 
@@ -769,52 +751,52 @@ int runPairLD(int argc, char** argv) {
 
       //notice("i=%d, phased = %d",i,phased);
 
-      if ( ( maf >= arg.minMAF ) && 
-	   ( tvcf.callRate(i) >= arg.minCallRate ) &&
-	   ( tvcf.sumAlleles[i] >= arg.minAC ) &&
-	   ( tvcf.sumAlleles[i] <= arg.maxAC ) )
-	{
+      if ( ( maf >= arg.minMAF ) &&
+           ( tvcf.callRate(i) >= arg.minCallRate ) &&
+           ( tvcf.sumAlleles[i] >= arg.minAC ) &&
+           ( tvcf.sumAlleles[i] <= arg.maxAC ) )
+      {
 
- 	  offset = (m % winR2) * (n*2);
- 	  r2ID[m % winR2] = tvcf.markers[i];
- 	  r2AF[m % winR2] = af;
-	  sigma = sqrt(af*(1.-af));
-	  sigmaA = tvcf.alleleSD(i,true);
-	  h0 = (0-af)/sigma;
-	  h1 = (1.-af)/sigma;
-	  for(j=0; j < n; ++j) {
-	    phased = (gtFlag && (tvcf.phases[j + n*i] > 0) && (!ignorePhase));
-	    if ( phased ) {
- 	      geno = tvcf.genos[j + n*i];
- 	      if ( std::isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
- 	      ngeno = (int)geno;
- 	      phase = tvcf.phases[j + n*i];
- 	      switch(ngeno) {
- 	      case 0:
- 		r2G[offset+j+j] = r2G[offset+j+j+1] = h0;
- 		break;
- 	      case 1:
- 		if ( phase == 2 ) { r2G[offset+j+j] = h0; r2G[offset+j+j+1] = h1; }
- 		else if ( phase == 3 ) { r2G[offset+j+j] = h1; r2G[offset+j+j+1] = h0; }
- 		else { error("Incompatible phase information %d at heterozygous genotypes",phase); }
- 		break;
- 	      case 2:
- 		r2G[offset+j+j] = r2G[offset+j+j+1] = h1;
- 		break;
- 	      default:
- 		error("Incompatible genotype %d in phased VCF",ngeno);
- 	      }
- 	    }
-	    else {
-	      geno = tvcf.genos[j + n*i];
-	      if ( std::isnan(geno) ) {
-		r2G[offset+j+j] = r2G[offset+j+j+1] = 0;
-	      }
-	      else {
-		r2G[offset+j+j] = r2G[offset+j+j+1] = (geno-mu)/sigmaA;
-	      }
-	    }
-	  }
+        offset = (m % winR2) * (n*2);
+        r2ID[m % winR2] = tvcf.markers[i];
+        r2AF[m % winR2] = af;
+        sigma = sqrt(af*(1.-af));
+        sigmaA = tvcf.alleleSD(i,true);
+        h0 = (0-af)/sigma;
+        h1 = (1.-af)/sigma;
+        for(j=0; j < n; ++j) {
+          phased = (gtFlag && (tvcf.phases[j + n*i] > 0) && (!ignorePhase));
+          if ( phased ) {
+            geno = tvcf.genos[j + n*i];
+            if ( std::isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
+            ngeno = (int)geno;
+            phase = tvcf.phases[j + n*i];
+            switch(ngeno) {
+              case 0:
+                r2G[offset+j+j] = r2G[offset+j+j+1] = h0;
+                break;
+              case 1:
+                if ( phase == 2 ) { r2G[offset+j+j] = h0; r2G[offset+j+j+1] = h1; }
+                else if ( phase == 3 ) { r2G[offset+j+j] = h1; r2G[offset+j+j+1] = h0; }
+                else { error("Incompatible phase information %d at heterozygous genotypes",phase); }
+                break;
+              case 2:
+                r2G[offset+j+j] = r2G[offset+j+j+1] = h1;
+                break;
+              default:
+                error("Incompatible genotype %d in phased VCF",ngeno);
+            }
+          }
+          else {
+            geno = tvcf.genos[j + n*i];
+            if ( std::isnan(geno) ) {
+              r2G[offset+j+j] = r2G[offset+j+j+1] = 0;
+            }
+            else {
+              r2G[offset+j+j] = r2G[offset+j+j+1] = (geno-mu)/sigmaA;
+            }
+          }
+        }
 
 // 	  offset = (m % winR2) * (n*2);
 // 	  r2ID[m % winR2] = tvcf.markers[i];
@@ -856,82 +838,92 @@ int runPairLD(int argc, char** argv) {
 // 	    }
 // 	  }
 
-	  // calculate sliding-window r2 matrix
-	  r2 = r = 0;
-	  for(j=1; j < winR2; ++j) {
-	    //notice("foo %d %d %d %d",j,offset2,k);
-	    offset2 = ((m + j) % winR2) * (n*2);
-	    if ( r2AF[(m+j) % winR2] > 0 ) {
-	      for(k=0; k < n + n; ++k) {
-		//for(k=0; k < (phased ? n+n : n); ++k) {
-		r += (r2G[offset + k] * r2G[offset2 + k]);
-	      }
-	      r /= (double)(n+n);
+        // calculate sliding-window r2 matrix
+        r2 = r = 0;
+        for(j=1; j < winR2; ++j) {
+          //notice("foo %d %d %d %d",j,offset2,k);
+          offset2 = ((m + j) % winR2) * (n*2);
+          if ( r2AF[(m+j) % winR2] > 0 ) {
+            for(k=0; k < n + n; ++k) {
+              //for(k=0; k < (phased ? n+n : n); ++k) {
+              r += (r2G[offset + k] * r2G[offset2 + k]);
+            }
+            r /= (double)(n+n);
 
-	      // handle boundary condition
-	      if ( r > 1 ) r = 1.;
-	      else if ( r < -1 ) r = -1.;
+            // handle boundary condition
+            if ( r > 1 ) r = 1.;
+            else if ( r < -1 ) r = -1.;
 
-	      r2 = r*r;
-	      if ( r2 >= minR2 ) {
-		wf.printf("%s\t%s\t%.5lf\t%.5lf\t%.5lf\t%.5lf\n",r2ID[(m+j) % winR2].c_str(),r2ID[m % winR2].c_str(),r2AF[(m+j) % winR2],r2AF[m % winR2],r2,r);
-	      }
-	    }
-	  }
-	  ++m;
-	}
+            r2 = r*r;
+            if ( r2 >= minR2 ) {
+              wf.printf("%s\t%s\t%.5lf\t%.5lf\t%.5lf\t%.5lf\n",r2ID[(m+j) % winR2].c_str(),r2ID[m % winR2].c_str(),r2AF[(m+j) % winR2],r2AF[m % winR2],r2,r);
+            }
+          }
+        }
+        ++m;
+      }
     }
   }
   wf.close();
   return 0;
 }
 
-// create the list of r2 and 
-int runIndexLD(int argc, char** argv) {
-  // Parse the input arguments
-  std::string index;
-  double minR2 = 0;
-  int win = 1000000;
+// variable threshold test
+int runPairLD(int argc, char** argv) {
+  double minR2 = 1;
+  int winR2 = 1000;
   pVPHArgs arg;
-  arg.field = "GT";
   bool ignorePhase = false;
+  arg.field = "GT";
   ParameterList pl;
 
   BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("VCF Input Options")
-    LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("indf",&arg.indf)
-    LONG_STRINGPARAMETER("field",&arg.field)
-    LONG_STRINGPARAMETER("region",&arg.region)
-    LONG_STRINGPARAMETER("rule",&arg.rule)
-    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
-    LONG_INTPARAMETER("minMAC",&arg.minMAC)
-    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-    LONG_PARAMETER("ignorePhase",&ignorePhase)
-    LONG_PARAMETER("sepchr",&arg.sepchr)
+      LONG_PARAMETER_GROUP("VCF Input Options")
+      LONG_STRINGPARAMETER("vcf",&arg.vcf)
+      LONG_STRINGPARAMETER("indf",&arg.indf)
+      LONG_STRINGPARAMETER("field",&arg.field)
+      LONG_STRINGPARAMETER("region",&arg.region)
+      LONG_STRINGPARAMETER("rule",&arg.rule)
+      LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+      LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
+      LONG_INTPARAMETER("minMAC",&arg.minMAC)
+      LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+      LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+      LONG_PARAMETER("ignorePhase",&ignorePhase)
 
-    LONG_PARAMETER_GROUP("Index SNP position")
-    LONG_STRINGPARAMETER("index",&index)
-    LONG_INTPARAMETER("win",&win)
-    LONG_DOUBLEPARAMETER("min-r2",&minR2)
+      LONG_PARAMETER_GROUP("LD pruning Options")
+      LONG_INTPARAMETER("win-r2",&winR2)
+      LONG_DOUBLEPARAMETER("min-r2",&minR2)
 
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out",&arg.outf)
-    LONG_PARAMETER("verbose",&arg.verbose)
+      LONG_PARAMETER_GROUP("Output Options")
+      LONG_STRINGPARAMETER("out",&arg.outf)
+      LONG_PARAMETER("verbose",&arg.verbose)
   END_LONG_PARAMETERS();
 
   pl.Add(new LongParameters("Available Options", longParameters));
   pl.Read(argc,argv);
   pl.Status();
 
- // sanity check of input arguments
-  if ( arg.vcf.empty() || index.empty() || arg.outf.empty()  ) {
-    error("--vcf, --index, --out are required parameters (--indf are also recommended)");
+  // sanity check of input arguments
+  if ( arg.vcf.empty() || arg.outf.empty()  ) {
+    error("--vcf, --out are required parameters (--indf are also recommended)");
   }
 
-  fVcf tvcf;
+  if (arg.field == "GT") return runPairLD<gt_vec>(arg, minR2, winR2, ignorePhase);
+  else if (arg.field == "PL") return runPairLD<pl_vec>(arg, minR2, winR2, ignorePhase);
+  else if (arg.field == "GL") return runPairLD<gl_vec>(arg, minR2, winR2, ignorePhase);
+  else if (arg.field == "DS" || arg.field == "EC") return runPairLD<ds_vec>(arg, minR2, winR2, ignorePhase);
+  else
+  {
+    error("%s not supported", arg.field.c_str());
+    return -1;
+  }
+}
+
+template <typename VecType>
+int runIndexLD(pVPHArgs& arg, const std::string& index, double minR2, int win, bool ignorePhase)
+{
+  fVcf<VecType> tvcf;
 
   // parse index SNP info and convert it into regions
   std::vector<std::string> tokens;
@@ -976,27 +968,27 @@ int runIndexLD(int argc, char** argv) {
       ngeno = (int)geno;
       phase = tvcf.phases[j];
       switch(ngeno) {
-      case 0:
-	iG[j+j] = iG[j+j+1] = h0;
-	break;
-      case 1:
-	if ( phase == 2 ) { iG[j+j] = h0; iG[j+j+1] = h1; }
-	else if ( phase == 3 ) { iG[j+j] = h1; iG[j+j+1] = h0; }
-	else { error("Incompatible phase information %d at heterozygous genotypes",phase); }
-	break;
-      case 2:
-	iG[j+j] = iG[j+j+1] = h1;
-	break;
-      default:
-	error("Incompatible genotype %d in phased VCF",ngeno);
+        case 0:
+          iG[j+j] = iG[j+j+1] = h0;
+          break;
+        case 1:
+          if ( phase == 2 ) { iG[j+j] = h0; iG[j+j+1] = h1; }
+          else if ( phase == 3 ) { iG[j+j] = h1; iG[j+j+1] = h0; }
+          else { error("Incompatible phase information %d at heterozygous genotypes",phase); }
+          break;
+        case 2:
+          iG[j+j] = iG[j+j+1] = h1;
+          break;
+        default:
+          error("Incompatible genotype %d in phased VCF",ngeno);
       }
       //af = (double)cd/(double)(ab+cd);
     }
     else {
       for(j=0; j < n; ++j) {
-	geno = tvcf.genos[j];
-	if ( std::isnan(geno) ) { iG[j+j] = iG[j+j+1] = 0; }
-	else { iG[j+j] = iG[j+j+1] = (geno-mu)/sigmaA; }
+        geno = tvcf.genos[j];
+        if ( std::isnan(geno) ) { iG[j+j] = iG[j+j+1] = 0; }
+        else { iG[j+j] = iG[j+j+1] = (geno-mu)/sigmaA; }
       }
     }
   }
@@ -1011,13 +1003,13 @@ int runIndexLD(int argc, char** argv) {
 
   notice("Retrieving the genomic region %s",arg.region.c_str());
   tvcf.updateRegion(arg.region.c_str());
-  
+
   wFile wf(arg.outf.c_str());
   wf.printf("##INDEX=%s\n",index.c_str());
   wf.printf("##AF=%.5lf\n",af);
   wf.printf("#CHROM\tPOS\tID\tREF\tALT\tAF\tR2\tR\n");
-  
-  int nout = 0; 
+
+  int nout = 0;
   int M = 0;
   for(m = 0; tvcf.readMarkers(arg.unit); ) {
     if ( M / 10000 < (M + tvcf.nMarkers) / 10000 ) {
@@ -1028,62 +1020,62 @@ int runIndexLD(int argc, char** argv) {
     for(int i=0; i < tvcf.nMarkers; ++i) { // for each marker
       af = tvcf.alleleFreq(i);
       maf = af > 0.5 ? 1-af : af;
-  
-      if ( ( maf >= arg.minMAF ) && 
-	   ( tvcf.callRate(i) >= arg.minCallRate ) &&
-	   ( tvcf.sumAlleles[i] >= arg.minAC ) &&
-	   ( tvcf.sumAlleles[i] <= arg.maxAC ) ) { // if pass the criteria
-	mu = 2*af;
-	sigma = sqrt(af*(1.-af));
-	sigmaA = tvcf.alleleSD(0,true);
-	h0 = (0.0-af)/sigma;
-	h1 = (1.0-af)/sigma;
-	for(j=0; j < n; ++j) {
-	  geno = tvcf.genos[j + n*i];
-	  phased = (( tvcf.phases[j + n*i] > 0 ) && ( !ignorePhase ));
-	  if ( phased ) { // assume phased, non-missing genotypes
-	    if ( std::isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
-	    ngeno = (int)geno;
-	    phase = tvcf.phases[j + n*i];
-	    switch(ngeno) {
-	    case 0:
-	      tG[2*j] = tG[2*j+1] = h0;
-	      break;
-	    case 1:
-	      if ( phase == 2 ) { tG[j+j] = h0; tG[j+j+1] = h1; }
-	      else if ( phase == 3 ) { tG[j+j] = h1; tG[j+j+1] = h0; }
-	      else { error("Incompatible phase information %d at heterozygous genotypes",phase); }
-	      break;
-	    case 2:
-	      tG[j+j] = tG[j+j+1] = h1;
-	      break;
-	    default:
-	      error("Incompatible genotype %d in phased VCF",ngeno);
-	    }
-	  }
-	  else {
-	    geno = tvcf.genos[j + n*i];
-	    if ( std::isnan(geno) ) {
-	      tG[j+j] = tG[j+j+1] = 0;
-	    }
-	    else {
-	      tG[j+j] = tG[j+j+1] = (geno-mu)/sigmaA;
-	    }
-	  }
-	}
-	
-	// calculate r2 with index SNP
-	r = 0;
-	for(k=0; k < n+n; ++k) {
-	  r += (tG[k] * iG[k]);
-	  //notice("%d\t%lf\t%lf",k,iG[k],tG[k]);
-	}
-	r /= (double)(n+n);
-	//error("r=%lf",r);
-	if ( r*r >= minR2 ) { // print out R2
-	  wf.printf("%s\t%d\t.\t%s\t%s\t%.5lf\t%.5lf\t%.5lf\n",tvcf.chroms[i].c_str(), tvcf.pos1s[i], tvcf.refs[i].c_str(), tvcf.alts[i].c_str(), af, r*r, r);
-	  ++nout;
-	}
+
+      if ( ( maf >= arg.minMAF ) &&
+           ( tvcf.callRate(i) >= arg.minCallRate ) &&
+           ( tvcf.sumAlleles[i] >= arg.minAC ) &&
+           ( tvcf.sumAlleles[i] <= arg.maxAC ) ) { // if pass the criteria
+        mu = 2*af;
+        sigma = sqrt(af*(1.-af));
+        sigmaA = tvcf.alleleSD(0,true);
+        h0 = (0.0-af)/sigma;
+        h1 = (1.0-af)/sigma;
+        for(j=0; j < n; ++j) {
+          geno = tvcf.genos[j + n*i];
+          phased = (( tvcf.phases[j + n*i] > 0 ) && ( !ignorePhase ));
+          if ( phased ) { // assume phased, non-missing genotypes
+            if ( std::isnan(geno) ) { error("Missing genotype was observed in phased VCF"); }
+            ngeno = (int)geno;
+            phase = tvcf.phases[j + n*i];
+            switch(ngeno) {
+              case 0:
+                tG[2*j] = tG[2*j+1] = h0;
+                break;
+              case 1:
+                if ( phase == 2 ) { tG[j+j] = h0; tG[j+j+1] = h1; }
+                else if ( phase == 3 ) { tG[j+j] = h1; tG[j+j+1] = h0; }
+                else { error("Incompatible phase information %d at heterozygous genotypes",phase); }
+                break;
+              case 2:
+                tG[j+j] = tG[j+j+1] = h1;
+                break;
+              default:
+                error("Incompatible genotype %d in phased VCF",ngeno);
+            }
+          }
+          else {
+            geno = tvcf.genos[j + n*i];
+            if ( std::isnan(geno) ) {
+              tG[j+j] = tG[j+j+1] = 0;
+            }
+            else {
+              tG[j+j] = tG[j+j+1] = (geno-mu)/sigmaA;
+            }
+          }
+        }
+
+        // calculate r2 with index SNP
+        r = 0;
+        for(k=0; k < n+n; ++k) {
+          r += (tG[k] * iG[k]);
+          //notice("%d\t%lf\t%lf",k,iG[k],tG[k]);
+        }
+        r /= (double)(n+n);
+        //error("r=%lf",r);
+        if ( r*r >= minR2 ) { // print out R2
+          wf.printf("%s\t%d\t.\t%s\t%s\t%.5lf\t%.5lf\t%.5lf\n",tvcf.chroms[i].c_str(), tvcf.pos1s[i], tvcf.refs[i].c_str(), tvcf.alts[i].c_str(), af, r*r, r);
+          ++nout;
+        }
       }
     }
   }
@@ -1091,6 +1083,62 @@ int runIndexLD(int argc, char** argv) {
   notice("Successfully wrote %d variants at r2 threshold %f",nout,minR2);
   wf.close();
   return 0;
+}
+
+// create the list of r2 and 
+int runIndexLD(int argc, char** argv) {
+  // Parse the input arguments
+  std::string index;
+  double minR2 = 0;
+  int win = 1000000;
+  pVPHArgs arg;
+  arg.field = "GT";
+  bool ignorePhase = false;
+  ParameterList pl;
+
+  BEGIN_LONG_PARAMETERS(longParameters)
+      LONG_PARAMETER_GROUP("VCF Input Options")
+      LONG_STRINGPARAMETER("vcf",&arg.vcf)
+      LONG_STRINGPARAMETER("indf",&arg.indf)
+      LONG_STRINGPARAMETER("field",&arg.field)
+      LONG_STRINGPARAMETER("region",&arg.region)
+      LONG_STRINGPARAMETER("rule",&arg.rule)
+      LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+      LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
+      LONG_INTPARAMETER("minMAC",&arg.minMAC)
+      LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+      LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+      LONG_PARAMETER("ignorePhase",&ignorePhase)
+      LONG_PARAMETER("sepchr",&arg.sepchr)
+
+      LONG_PARAMETER_GROUP("Index SNP position")
+      LONG_STRINGPARAMETER("index",&index)
+      LONG_INTPARAMETER("win",&win)
+      LONG_DOUBLEPARAMETER("min-r2",&minR2)
+
+      LONG_PARAMETER_GROUP("Output Options")
+      LONG_STRINGPARAMETER("out",&arg.outf)
+      LONG_PARAMETER("verbose",&arg.verbose)
+  END_LONG_PARAMETERS();
+
+  pl.Add(new LongParameters("Available Options", longParameters));
+  pl.Read(argc,argv);
+  pl.Status();
+
+  // sanity check of input arguments
+  if ( arg.vcf.empty() || index.empty() || arg.outf.empty()  ) {
+    error("--vcf, --index, --out are required parameters (--indf are also recommended)");
+  }
+
+  if (arg.field == "GT") return runIndexLD<gt_vec>(arg, index, minR2, win, ignorePhase);
+  else if (arg.field == "PL") return runIndexLD<pl_vec>(arg, index, minR2, win, ignorePhase);
+  else if (arg.field == "GL") return runIndexLD<gl_vec>(arg, index, minR2, win, ignorePhase);
+  else if (arg.field == "DS" || arg.field == "EC") return runIndexLD<ds_vec>(arg, index, minR2, win, ignorePhase);
+  else
+  {
+    error("%s not supported", arg.field.c_str());
+    return -1;
+  }
 }
 
 // create the list of r2 and 
@@ -1116,27 +1164,27 @@ int runPeakShift(int argc, char** argv) {
   ParameterList pl;
 
   BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("Input Files")
-    LONG_STRINGPARAMETER("score",&score)
-    LONG_STRINGPARAMETER("bed",&bed)
-    LONG_STRINGPARAMETER("mpu",&mpu)
-    LONG_STRINGPARAMETER("mask",&mask)
-    LONG_PARAMETER("ucsc",&ucsc)
+      LONG_PARAMETER_GROUP("Input Files")
+      LONG_STRINGPARAMETER("score",&score)
+      LONG_STRINGPARAMETER("bed",&bed)
+      LONG_STRINGPARAMETER("mpu",&mpu)
+      LONG_STRINGPARAMETER("mask",&mask)
+      LONG_PARAMETER("ucsc",&ucsc)
 
-    LONG_PARAMETER_GROUP("Input Options")
-    LONG_PARAMETER("no-avg",&noAvgFlag)
-    LONG_INTPARAMETER("seed",&seed)
-    LONG_INTPARAMETER("nperm",&nperm)
+      LONG_PARAMETER_GROUP("Input Options")
+      LONG_PARAMETER("no-avg",&noAvgFlag)
+      LONG_INTPARAMETER("seed",&seed)
+      LONG_INTPARAMETER("nperm",&nperm)
 
-    LONG_PARAMETER_GROUP("Regions to focus")
-    LONG_STRINGPARAMETER("region",&region)
-    LONG_STRINGPARAMETER("chrpos",&chrpos)
-    LONG_INTPARAMETER("win",&win)
-    LONG_INTPARAMETER("max-shift",&maxShift)
-    LONG_INTPARAMETER("min-depth",&minDepth)
+      LONG_PARAMETER_GROUP("Regions to focus")
+      LONG_STRINGPARAMETER("region",&region)
+      LONG_STRINGPARAMETER("chrpos",&chrpos)
+      LONG_INTPARAMETER("win",&win)
+      LONG_INTPARAMETER("max-shift",&maxShift)
+      LONG_INTPARAMETER("min-depth",&minDepth)
 
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out",&out)
+      LONG_PARAMETER_GROUP("Output Options")
+      LONG_STRINGPARAMETER("out",&out)
   END_LONG_PARAMETERS();
 
   pl.Add(new LongParameters("Available Options", longParameters));
@@ -1209,13 +1257,13 @@ int runPeakShift(int argc, char** argv) {
       std::string key("ALL");
       //double f = 1.;
       if ( tokens.size() < 3 ) {
-	error("BED file must have at least three columns");
+        error("BED file must have at least three columns");
       }
       else if ( tokens.size() > 3 ) {
-	key = tokens[3];
-	//if ( tokens.size() > 4 ) {
-	//f = atof(tokens[4].c_str());
-	//}
+        key = tokens[3];
+        //if ( tokens.size() > 4 ) {
+        //f = atof(tokens[4].c_str());
+        //}
       }
       int beg = atoi(tokens[1].c_str())+1;
       int end = atoi(tokens[2].c_str());
@@ -1232,14 +1280,14 @@ int runPeakShift(int argc, char** argv) {
     pFile mpuf(mpu.c_str(), region.c_str());
     while( ( line = mpuf.getLine() ) != NULL ) {
       if ( tokens.size() < 4 ) {
-	error("MPU file must have at least four columns");
+        error("MPU file must have at least four columns");
       }
       std::string key("ALL");
       int pos = atoi(tokens[1].c_str());
       if ( ( pos < minpos ) || ( pos > maxpos ) ) continue;
       int depth = atoi(tokens[3].c_str());
-      if ( depth >= minDepth ) 
-	mLoci[key].add(tokens[0].c_str(), pos, pos);
+      if ( depth >= minDepth )
+        mLoci[key].add(tokens[0].c_str(), pos, pos);
     }
     notice("Identified region of %d base pairs with depth %d or greater",mLoci.size(),minDepth);
   }
@@ -1277,25 +1325,25 @@ int runPeakShift(int argc, char** argv) {
       loci.moveTo(bedchr.c_str(), newpos);
       //notice("++ %s %d %d %d %d %d %d",it->first.c_str(),loci.isend(),loci.it == loci.loci.begin(),loci.loci.size(),loci.it->beg1,firstpos,loci.it->end0);
       while ( jt != pos2score.end() && firstpos <= newpos ) {
-	while( !loci.isend() && loci.it->end0 < newpos ) { loci.next(); }
-	if ( ( loci.it->beg1 <= newpos ) && ( loci.it->end0 >= newpos ) ) { 
-	  //if ( jt->second > 0.01 ) notice("** %d %d %d %d %.5lf",loci.it->beg1,newpos,loci.it->end0,i, jt->second);
-	  sum += jt->second;
-	  ++num;
-	}
-	++jt;
-	newpos = ( jt->first - minpos + offsets[i] ) % length + minpos;
+        while( !loci.isend() && loci.it->end0 < newpos ) { loci.next(); }
+        if ( ( loci.it->beg1 <= newpos ) && ( loci.it->end0 >= newpos ) ) {
+          //if ( jt->second > 0.01 ) notice("** %d %d %d %d %.5lf",loci.it->beg1,newpos,loci.it->end0,i, jt->second);
+          sum += jt->second;
+          ++num;
+        }
+        ++jt;
+        newpos = ( jt->first - minpos + offsets[i] ) % length + minpos;
       }
       loci.rewind();
       while( jt != pos2score.end() ) {
-	while( !loci.isend() && loci.it->end0 < newpos ) { loci.next(); }
-	if ( ( loci.it->beg1 <= newpos ) && ( loci.it->end0 >= newpos ) ) { 
-	  //if ( jt->second > 0.01 ) notice("** %d %d %d %d %.5lf",loci.it->beg1,newpos,loci.it->end0,i, jt->second);
-	  sum += jt->second;
-	  ++num;
-	}
-	++jt;
-	newpos = ( jt->first - minpos + offsets[i] ) % length + minpos;
+        while( !loci.isend() && loci.it->end0 < newpos ) { loci.next(); }
+        if ( ( loci.it->beg1 <= newpos ) && ( loci.it->end0 >= newpos ) ) {
+          //if ( jt->second > 0.01 ) notice("** %d %d %d %d %.5lf",loci.it->beg1,newpos,loci.it->end0,i, jt->second);
+          sum += jt->second;
+          ++num;
+        }
+        ++jt;
+        newpos = ( jt->first - minpos + offsets[i] ) % length + minpos;
       }
       /*
       for(std::map<int,double>::iterator jt = pos2score.begin(); jt != pos2score.end(); ++jt) {
@@ -1332,7 +1380,7 @@ int runPeakShift(int argc, char** argv) {
 
     if ( it->first == "5" ) {
       for(int i=1; i < 100; ++i) {
-	//wf.printf("--%s\t%.5lf\t%.5lf\t%.2lg\t%.2lg\t%d\t%d\n",it->first.c_str(), (double)mLoci[it->first].totalLength()/(double)length,(double)numScores[it->first][i]/(double)pos2score.size(), s[i], noAvgFlag ? s[i] : s[i] * numScores[it->first][i], s[i] > s[0], s[i] >= s[0]);
+        //wf.printf("--%s\t%.5lf\t%.5lf\t%.2lg\t%.2lg\t%d\t%d\n",it->first.c_str(), (double)mLoci[it->first].totalLength()/(double)length,(double)numScores[it->first][i]/(double)pos2score.size(), s[i], noAvgFlag ? s[i] : s[i] * numScores[it->first][i], s[i] > s[0], s[i] >= s[0]);
       }
     }
   }
@@ -1399,7 +1447,7 @@ int runBedEnrich(int argc, char** argv) {
   double minP = 0;           // fix min P
   int binLD = 100000;        // bin for defining LD
   int winLD = 1000000;       // bin for defining maximum LD with causal SNPs
-  
+
   std::string pvalcol("PVALUE");
   std::string weightcol("WEIGHT");
   std::string mafcol("MAF");
@@ -1408,38 +1456,38 @@ int runBedEnrich(int argc, char** argv) {
   ParameterList pl;
 
   BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("Input Files")
-    LONG_STRINGPARAMETER("score",&score)
-    LONG_STRINGPARAMETER("bed",&bed)
-    LONG_STRINGPARAMETER("grp",&grp)
-    LONG_STRINGPARAMETER("mask",&mask)
-    LONG_PARAMETER("ucsc",&ucsc)
-    LONG_STRINGPARAMETER("pval-col",&pvalcol)
-    LONG_STRINGPARAMETER("maf-col",&mafcol)
-    LONG_STRINGPARAMETER("weight-col",&weightcol)
+      LONG_PARAMETER_GROUP("Input Files")
+      LONG_STRINGPARAMETER("score",&score)
+      LONG_STRINGPARAMETER("bed",&bed)
+      LONG_STRINGPARAMETER("grp",&grp)
+      LONG_STRINGPARAMETER("mask",&mask)
+      LONG_PARAMETER("ucsc",&ucsc)
+      LONG_STRINGPARAMETER("pval-col",&pvalcol)
+      LONG_STRINGPARAMETER("maf-col",&mafcol)
+      LONG_STRINGPARAMETER("weight-col",&weightcol)
 
-    LONG_PARAMETER_GROUP("Input Options")
-    LONG_PARAMETER("no-avg",&noAvgFlag)
-    LONG_INTPARAMETER("seed",&seed)
-    LONG_INTPARAMETER("nperm",&nperm)
-    LONG_DOUBLEPARAMETER("min-maf",&minMAF)
-    LONG_DOUBLEPARAMETER("max-maf",&maxMAF)
-    LONG_PARAMETER("raw",&rawz)
-    LONG_DOUBLEPARAMETER("min-pval",&minP)
-    LONG_DOUBLEPARAMETER("thres-pval",&thresP)
-    LONG_DOUBLEPARAMETER("max-peak-pval",&maxP)
+      LONG_PARAMETER_GROUP("Input Options")
+      LONG_PARAMETER("no-avg",&noAvgFlag)
+      LONG_INTPARAMETER("seed",&seed)
+      LONG_INTPARAMETER("nperm",&nperm)
+      LONG_DOUBLEPARAMETER("min-maf",&minMAF)
+      LONG_DOUBLEPARAMETER("max-maf",&maxMAF)
+      LONG_PARAMETER("raw",&rawz)
+      LONG_DOUBLEPARAMETER("min-pval",&minP)
+      LONG_DOUBLEPARAMETER("thres-pval",&thresP)
+      LONG_DOUBLEPARAMETER("max-peak-pval",&maxP)
 
-    LONG_PARAMETER_GROUP("Regions to focus")
-    LONG_STRINGPARAMETER("region",&region)
-    LONG_STRINGPARAMETER("chrpos",&chrpos)
-    LONG_INTPARAMETER("win",&win)
-    LONG_INTPARAMETER("max-shift",&maxShift)
-    LONG_INTPARAMETER("min-depth",&minDepth)
+      LONG_PARAMETER_GROUP("Regions to focus")
+      LONG_STRINGPARAMETER("region",&region)
+      LONG_STRINGPARAMETER("chrpos",&chrpos)
+      LONG_INTPARAMETER("win",&win)
+      LONG_INTPARAMETER("max-shift",&maxShift)
+      LONG_INTPARAMETER("min-depth",&minDepth)
 
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out",&out)
-    LONG_STRINGPARAMETER("out-detail",&outDetail)
-    LONG_STRINGPARAMETER("out-post",&outPost)
+      LONG_PARAMETER_GROUP("Output Options")
+      LONG_STRINGPARAMETER("out",&out)
+      LONG_STRINGPARAMETER("out-detail",&outDetail)
+      LONG_STRINGPARAMETER("out-post",&outPost)
   END_LONG_PARAMETERS();
 
   pl.Add(new LongParameters("Available Options", longParameters));
@@ -1477,7 +1525,7 @@ int runBedEnrich(int argc, char** argv) {
     while( ( line = grpf.getLine() ) != NULL ) {
       pFile::tokenizeLine(line," \t\r\n",tokens);
       for(int i=1; i < (int)tokens.size(); ++i) {
-	keyGroups[tokens[i]].push_back(tokens[0]);
+        keyGroups[tokens[i]].push_back(tokens[0]);
       }
     }
   }
@@ -1539,41 +1587,41 @@ int runBedEnrich(int argc, char** argv) {
       if ( maxupos < upos ) maxupos = upos;
       maf = atof(tokens[imaf].c_str());
       if ( ( maf >= minMAF ) && ( maf <= maxMAF ) ) {
-	pval = atof(tokens[ipval].c_str());
-	//zscore = 0-hDist::ltqnorm(pval/2.);
-	zscore = hDist::pval2z(pval);
+        pval = atof(tokens[ipval].c_str());
+        //zscore = 0-hDist::ltqnorm(pval/2.);
+        zscore = hDist::pval2z(pval);
 
-	if ( pval > thresP ) zscore = 0;
-	if ( zscore > minPZ ) zscore = minPZ;
+        if ( pval > thresP ) zscore = 0;
+        if ( zscore > minPZ ) zscore = minPZ;
 
-	if ( !rawz ) {
-	  // set max-z for every possible bins
-	  for( int64_t win = 0-winLD; win <= winLD; win += binLD ) {
-	    uint64_t key = (upos + win)/binLD;
-	    if ( maxzs.find(key) == maxzs.end() ) {  // not found
-	      maxzs[key] = maxPZ; // default maxz is defined by maxP
-	    }
-	    if ( maxzs[key] < zscore ) 
-	      maxzs[key] = zscore;
-	  }
-	}
-	/*
-	if ( pval > thresP ) zscore = 0;
-	if ( maxz < zscore ) {
-	  if ( minP == 0 ) {
-	    maxz = zscore;  // max z is based on min P
-	  }
-	  else {
-	    zscore = maxz;  // max z is a fixed value
-	  }
-	}
-	*/
-	upos2score[upos] = zscore;
-	upos2pvalue[upos] = pval;
-	if ( iweight >= 0 ) {
-	  weight = atof(tokens[iweight].c_str());
-	  upos2weight[upos] = weight;
-	}
+        if ( !rawz ) {
+          // set max-z for every possible bins
+          for( int64_t win = 0-winLD; win <= winLD; win += binLD ) {
+            uint64_t key = (upos + win)/binLD;
+            if ( maxzs.find(key) == maxzs.end() ) {  // not found
+              maxzs[key] = maxPZ; // default maxz is defined by maxP
+            }
+            if ( maxzs[key] < zscore )
+              maxzs[key] = zscore;
+          }
+        }
+        /*
+        if ( pval > thresP ) zscore = 0;
+        if ( maxz < zscore ) {
+          if ( minP == 0 ) {
+            maxz = zscore;  // max z is based on min P
+          }
+          else {
+            zscore = maxz;  // max z is a fixed value
+          }
+        }
+        */
+        upos2score[upos] = zscore;
+        upos2pvalue[upos] = pval;
+        if ( iweight >= 0 ) {
+          weight = atof(tokens[iweight].c_str());
+          upos2weight[upos] = weight;
+        }
       }
     }
   }
@@ -1587,19 +1635,19 @@ int runBedEnrich(int argc, char** argv) {
   double maxz = 0;
   if ( !rawz ) {
     for(std::map<uint64_t,double>::iterator it = upos2score.begin();
-	it != upos2score.end(); ++it) {
+        it != upos2score.end(); ++it) {
       //it->second = exp(0.5 * (it->second * it->second - maxz * maxz));
       maxz = maxzs[it->first/binLD];
       it->second = exp(0.5 * (it->second * it->second - maxz * maxz));
       psum += (it->second);
     }
-    
+
     for(std::map<uint64_t,double>::iterator it = upos2score.begin();
-	it != upos2score.end(); ++it) {
+        it != upos2score.end(); ++it) {
       it->second /= psum;
       if ( postf != NULL ) {
-	std::pair<std::string,int> pos = genomePos.toPos(it->first);
-	postf->printf("%s\t%d\t%.4lg\t%.4lf\n",pos.first.c_str(),pos.second,it->second,iweight >= 0 ? upos2weight[it->first] : 1.0);
+        std::pair<std::string,int> pos = genomePos.toPos(it->first);
+        postf->printf("%s\t%d\t%.4lg\t%.4lf\n",pos.first.c_str(),pos.second,it->second,iweight >= 0 ? upos2weight[it->first] : 1.0);
       }
     }
   }
@@ -1657,8 +1705,8 @@ int runBedEnrich(int argc, char** argv) {
     else {
       std::vector<std::string>& v = keyGroups[key];
       for(int i=0; i < (int)v.size(); ++i) {
-	mLoci[v[i]].add(ubeg, uend);
-	++ngroups;
+        mLoci[v[i]].add(ubeg, uend);
+        ++ngroups;
       }
     }
     ++nregions;
@@ -1705,36 +1753,36 @@ int runBedEnrich(int argc, char** argv) {
       // move to the position we need
       loci.moveTo(newupos);
       while ( jt != upos2score.end() && firstupos <= newupos ) {
-	while( !loci.isend() && loci.it->uend0 < newupos ) { loci.next(); }
-	if ( ( loci.it->ubeg1 <= newupos ) && ( loci.it->uend0 >= newupos ) ) { 
-	  sum += (iweight < 0) ? jt->second : (jt->second * upos2weight[jt->first]);
-	  num += (iweight < 0) ? 1.0 : (upos2weight[jt->first]);
-	  if ( i == 0 ) {
-	    double p = upos2pvalue[jt->first];
-	    if ( p < minpval ) minpval = p;
-	  }
-	}
-	++jt;
-	newupos = ( jt->first - minupos + offsets[i] ) % length + minupos;
+        while( !loci.isend() && loci.it->uend0 < newupos ) { loci.next(); }
+        if ( ( loci.it->ubeg1 <= newupos ) && ( loci.it->uend0 >= newupos ) ) {
+          sum += (iweight < 0) ? jt->second : (jt->second * upos2weight[jt->first]);
+          num += (iweight < 0) ? 1.0 : (upos2weight[jt->first]);
+          if ( i == 0 ) {
+            double p = upos2pvalue[jt->first];
+            if ( p < minpval ) minpval = p;
+          }
+        }
+        ++jt;
+        newupos = ( jt->first - minupos + offsets[i] ) % length + minupos;
       }
       loci.rewind();
       while( jt != upos2score.end() ) {
-	while( !loci.isend() && loci.it->uend0 < newupos ) { loci.next(); }
-	if ( ( loci.it->ubeg1 <= newupos ) && ( loci.it->uend0 >= newupos ) ) { 
-	  sum += (iweight < 0) ? jt->second : (jt->second * upos2weight[jt->first]);
-	  num += (iweight < 0) ? 1.0 : (upos2weight[jt->first]);
-	  if ( i == 0 ) {
-	    double p = upos2pvalue[jt->first];
-	    if ( p < minpval ) minpval = p;
-	  }
-	}
-	++jt;
-	newupos = ( jt->first - minupos + offsets[i] ) % length + minupos;
+        while( !loci.isend() && loci.it->uend0 < newupos ) { loci.next(); }
+        if ( ( loci.it->ubeg1 <= newupos ) && ( loci.it->uend0 >= newupos ) ) {
+          sum += (iweight < 0) ? jt->second : (jt->second * upos2weight[jt->first]);
+          num += (iweight < 0) ? 1.0 : (upos2weight[jt->first]);
+          if ( i == 0 ) {
+            double p = upos2pvalue[jt->first];
+            if ( p < minpval ) minpval = p;
+          }
+        }
+        ++jt;
+        newupos = ( jt->first - minupos + offsets[i] ) % length + minupos;
       }
       sumScores[it->first].push_back(noAvgFlag ? sum : sum/(num+1e-10));
       numScores[it->first].push_back(num);
       if ( i == 0 ) {
-	minPvalue[it->first] = minpval;
+        minPvalue[it->first] = minpval;
       }
     }
   }
@@ -1799,32 +1847,32 @@ int runBGZIndex(int argc, char** argv) {
   bool verbose = false;
 
   BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("Input Options")
-    LONG_STRINGPARAMETER("in",&gzf)
-    LONG_STRINGPARAMETER("offset",&sbyte)
-    LONG_INTPARAMETER("nelems",&nelems)
+      LONG_PARAMETER_GROUP("Input Options")
+      LONG_STRINGPARAMETER("in",&gzf)
+      LONG_STRINGPARAMETER("offset",&sbyte)
+      LONG_INTPARAMETER("nelems",&nelems)
 
-    LONG_PARAMETER_GROUP("Read or Index")
-    EXCLUSIVE_PARAMETER("index",&indexFlag)
-    EXCLUSIVE_PARAMETER("read",&readFlag)
+      LONG_PARAMETER_GROUP("Read or Index")
+      EXCLUSIVE_PARAMETER("index",&indexFlag)
+      EXCLUSIVE_PARAMETER("read",&readFlag)
 
-    LONG_PARAMETER_GROUP("Read Type")
-    EXCLUSIVE_PARAMETER("uint8",&uint8_t_Flag)
-    EXCLUSIVE_PARAMETER("uint16",&uint16_t_Flag)
-    EXCLUSIVE_PARAMETER("uint32",&uint32_t_Flag)
-    EXCLUSIVE_PARAMETER("uint64",&uint64_t_Flag)
-    EXCLUSIVE_PARAMETER("int8",&int8_t_Flag)
-    EXCLUSIVE_PARAMETER("int16",&int16_t_Flag)
-    EXCLUSIVE_PARAMETER("int32",&int32_t_Flag)
-    EXCLUSIVE_PARAMETER("int64",&int64_t_Flag)
-    EXCLUSIVE_PARAMETER("char",&char_t_Flag)
-    EXCLUSIVE_PARAMETER("float",&float_t_Flag)
-    EXCLUSIVE_PARAMETER("double",&double_t_Flag)
+      LONG_PARAMETER_GROUP("Read Type")
+      EXCLUSIVE_PARAMETER("uint8",&uint8_t_Flag)
+      EXCLUSIVE_PARAMETER("uint16",&uint16_t_Flag)
+      EXCLUSIVE_PARAMETER("uint32",&uint32_t_Flag)
+      EXCLUSIVE_PARAMETER("uint64",&uint64_t_Flag)
+      EXCLUSIVE_PARAMETER("int8",&int8_t_Flag)
+      EXCLUSIVE_PARAMETER("int16",&int16_t_Flag)
+      EXCLUSIVE_PARAMETER("int32",&int32_t_Flag)
+      EXCLUSIVE_PARAMETER("int64",&int64_t_Flag)
+      EXCLUSIVE_PARAMETER("char",&char_t_Flag)
+      EXCLUSIVE_PARAMETER("float",&float_t_Flag)
+      EXCLUSIVE_PARAMETER("double",&double_t_Flag)
 
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_PARAMETER("force",&forceFlag)
-    LONG_PARAMETER("verbose",&verbose)
-    LONG_STRINGPARAMETER("out",&outf)
+      LONG_PARAMETER_GROUP("Output Options")
+      LONG_PARAMETER("force",&forceFlag)
+      LONG_PARAMETER("verbose",&verbose)
+      LONG_STRINGPARAMETER("out",&outf)
   END_LONG_PARAMETERS();
 
   pl.Add(new LongParameters("Available Options", longParameters));
@@ -1850,7 +1898,7 @@ int runBGZIndex(int argc, char** argv) {
     }
     FILE* wp = fopen(idxf.c_str(), "w");
     if ( wp == NULL ) error("Cannot write to %s",idxf.c_str());
-    
+
     uint8_t u8;
     uint16_t u16;
     uint32_t u32;
@@ -1892,16 +1940,16 @@ int runBGZIndex(int argc, char** argv) {
       FILE* fp = fopen(idxf.c_str(), "r");
       if ( fp == NULL ) error("Cannot open %s",idxf.c_str());
       fseek(fp, block * sizeof(uint64_t), SEEK_SET);
-      if ( fread(&cblock, sizeof(uint64_t), 1, fp) != 1 ) 
-	error("Cannot read from %s",idxf.c_str());
+      if ( fread(&cblock, sizeof(uint64_t), 1, fp) != 1 )
+        error("Cannot read from %s",idxf.c_str());
       fclose(fp);
     }
 
     int64_t start = (cblock << 16 | offset);
     int32_t szelem = ( uint8_t_Flag | int8_t_Flag | char_t_Flag ) ? sizeof(uint8_t) :
-      ( (uint16_t_Flag | int16_t_Flag ) ? sizeof(uint16_t) :
-	( (uint32_t_Flag | int32_t_Flag | float_t_Flag) ? sizeof(uint32_t) :
-	  ( ( uint64_t_Flag | int64_t_Flag | double_t_Flag ) ? sizeof(uint64_t) : -1 ) ) );
+                     ( (uint16_t_Flag | int16_t_Flag ) ? sizeof(uint16_t) :
+                       ( (uint32_t_Flag | int32_t_Flag | float_t_Flag) ? sizeof(uint32_t) :
+                         ( ( uint64_t_Flag | int64_t_Flag | double_t_Flag ) ? sizeof(uint64_t) : -1 ) ) );
     if ( szelem == -1 ) {
       uint8_t_Flag = true;
       szelem = sizeof(uint8_t);
@@ -1913,7 +1961,7 @@ int runBGZIndex(int argc, char** argv) {
 
     wFile wf(outf.c_str());
     int c;
-    
+
     if (bgzf_seek(bp, start, SEEK_SET) < 0) error("Cannot perform bgzf_seek in %s to %ld",gzf.c_str(),start);
     while (1) {
       if (end < 0) c = bgzf_read(bp, buffer, WINDOW_SIZE);
@@ -1922,42 +1970,42 @@ int runBGZIndex(int argc, char** argv) {
       if (c < 0) error("Cannot perform bgzf_seek in %s",gzf.c_str());
       start += c;
       for(int i=0; i < c; i += szelem) {
-	if ( uint8_t_Flag ) {
-	  wf.printf("%u\n",*(const uint8_t*)(buffer+i));
-	}
-	else if ( int8_t_Flag ) {
-	  wf.printf("%d\n",*(const int8_t*)(buffer+i));
-	}
-	else if ( char_t_Flag ) {
-	  wf.printf("%c\n",*(buffer+i));
-	}
-	else if ( uint16_t_Flag ) {
-	  wf.printf("%u\n",*(const uint16_t*)(buffer+i));
-	}
-	else if ( int16_t_Flag ) {
-	  wf.printf("%d\n",*(const int16_t*)(buffer+i));
-	}
-	else if ( uint32_t_Flag ) {
-	  wf.printf("%lu\n",*(const uint16_t*)(buffer+i));
-	}
-	else if ( int32_t_Flag ) {
-	  wf.printf("%ld\n",*(const int16_t*)(buffer+i));
-	}
-	else if ( float_t_Flag ) {
-	  wf.printf("%g\n",*(const float*)(buffer+i));
-	}
-	else if ( uint64_t_Flag ) {
-	  wf.printf("%llu\n",*(const uint64_t*)(buffer+i));
-	}
-	else if ( int32_t_Flag ) {
-	  wf.printf("%lld\n",*(const int64_t*)(buffer+i));
-	}
-	else if ( double_t_Flag ) {
-	  wf.printf("%g\n",*(const double*)(buffer+i));
-	}
-	else {
-	  error("Unrecognized output type");
-	}
+        if ( uint8_t_Flag ) {
+          wf.printf("%u\n",*(const uint8_t*)(buffer+i));
+        }
+        else if ( int8_t_Flag ) {
+          wf.printf("%d\n",*(const int8_t*)(buffer+i));
+        }
+        else if ( char_t_Flag ) {
+          wf.printf("%c\n",*(buffer+i));
+        }
+        else if ( uint16_t_Flag ) {
+          wf.printf("%u\n",*(const uint16_t*)(buffer+i));
+        }
+        else if ( int16_t_Flag ) {
+          wf.printf("%d\n",*(const int16_t*)(buffer+i));
+        }
+        else if ( uint32_t_Flag ) {
+          wf.printf("%lu\n",*(const uint16_t*)(buffer+i));
+        }
+        else if ( int32_t_Flag ) {
+          wf.printf("%ld\n",*(const int16_t*)(buffer+i));
+        }
+        else if ( float_t_Flag ) {
+          wf.printf("%g\n",*(const float*)(buffer+i));
+        }
+        else if ( uint64_t_Flag ) {
+          wf.printf("%llu\n",*(const uint64_t*)(buffer+i));
+        }
+        else if ( int32_t_Flag ) {
+          wf.printf("%lld\n",*(const int64_t*)(buffer+i));
+        }
+        else if ( double_t_Flag ) {
+          wf.printf("%g\n",*(const double*)(buffer+i));
+        }
+        else {
+          error("Unrecognized output type");
+        }
       }
       //write(f_dst, buffer, c);
       if (end >= 0 && start >= end) break;

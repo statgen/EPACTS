@@ -21,6 +21,7 @@
 #include "boolParser.h"
 #include "PhredHelper.h"
 
+template<typename VecType>
 class fVcf {
 private:
   savvy::indexed_reader reader_;
@@ -395,7 +396,7 @@ public:
     }
   }
 
-  int parseMarkers(savvy::variant_vector<std::vector<float>> var, int startIdx = 9) {
+  int parseMarkers(VecType var, int startIdx = 9) {
     //notice("fVcf::parseMarkers() called");
     //, std::vector<std::string>& m, std::vector<float>& v, int startIdx = 9, const char* key = "GT", const char** infoSubstrs = NULL, int nSubstr = 0) {
     char* p;
@@ -1201,7 +1202,7 @@ public:
   int readMarkerGroup(std::vector<std::string>& markerIDs,
                       int startIndex = 0, bool sepchr = false)
   {
-    savvy::variant_vector<std::vector<float>> var;
+    VecType var;
 
     std::string curChrom;
     int beg = 1000000000, end = 0;
@@ -1272,7 +1273,7 @@ public:
 
   // read markers until reach the end of file
   int readMarkers(int m = 0, bool del = true) {
-    savvy::variant_vector<std::vector<float>> var;
+    VecType var;
 
     if ( del ) clear();
 
@@ -1282,7 +1283,7 @@ public:
 
     //fprintf(stderr,"fVcf::readMarkers(%d) called",m);
 
-    while ( glFlag ?  reader_ >> reinterpret_cast<savvy::dense_dosage_vector<float>&>(var) :  reader_ >> reinterpret_cast<savvy::dense_genotype_vector<float>&>(var) ) {
+    while (reader_ >> var) {
       int cols2 = parseMarkers(var);
       //notice("cols2 = %d",cols2);
       if ( cols2 >= 0 ) {
@@ -1471,7 +1472,9 @@ public:
   }
 };
 
-const float fVcf::NAN_FLT = sqrtf(-1.);     // assign float  NAN value
-const double fVcf::NAN_DBL = sqrt(-1.);  // assign double NAN value
+template<typename T>
+const float fVcf<T>::NAN_FLT = sqrtf(-1.);     // assign float  NAN value
+template<typename T>
+const double fVcf<T>::NAN_DBL = sqrt(-1.);  // assign double NAN value
 
 #endif // __TABIXED_FVCF_H

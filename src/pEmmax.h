@@ -656,6 +656,7 @@ public:
   }
 };
 
+template <typename VecType>
 class pEmmax {
  public:
   // below is for member variables and functions
@@ -665,7 +666,7 @@ class pEmmax {
   VectorXd y, evalR; // phenotypes
   MatrixXd X, evecR, T; // covariates
   MatrixXd K, Ks, P; // kinship matrices
-  fVcf tvcf;  // VCF file
+  fVcf<VecType> tvcf;  // VCF file
   std::vector<std::string> inds;
   std::vector<std::string> pedcols;
 
@@ -731,7 +732,7 @@ class pEmmax {
        }
        for(i=1; i < c; ++i) {
 	 if ( tokens[i] == "NA" ) {
-	   vcov.push_back(fVcf::NAN_DBL);
+	   vcov.push_back(std::numeric_limits<double>::quiet_NaN());
 	   ++nMissing;
 	 }
 	 else {
@@ -1014,6 +1015,7 @@ class pEmmax {
  }
 };
 
+template <typename VecType>
 class pEmmaxMulti {
  public:
   // below is for member variables and functions
@@ -1023,7 +1025,7 @@ class pEmmaxMulti {
   VectorXd evalR;    // eigenvalues
   MatrixXd Y, X, evecR, T; // covariates
   MatrixXd K, P; // kinship matrices
-  fVcf tvcf;  // VCF file
+  fVcf<VecType> tvcf;  // VCF file
   std::vector<std::string> inds;
   std::vector<std::string> pedcols;
 
@@ -1074,7 +1076,7 @@ class pEmmaxMulti {
 	}
 	for(i=1; i < c; ++i) {
 	  if ( tokens[i] == "NA" ) {
-	    vphe.push_back(fVcf::NAN_DBL);
+	    vphe.push_back(std::numeric_limits<double>::quiet_NaN());
 	    ++nMissing;
 	  }
 	  else {
@@ -1106,7 +1108,7 @@ class pEmmaxMulti {
 	}
 	for(i=1; i < c; ++i) {
 	  if ( tokens[i] == "NA" ) {
-	    vcov.push_back(fVcf::NAN_DBL);
+	    vcov.push_back(std::numeric_limits<double>::quiet_NaN());
 	    ++nMissing;
 	  }
 	  else {

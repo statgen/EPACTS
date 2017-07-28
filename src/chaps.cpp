@@ -13,6 +13,11 @@
 #include <getopt.h>
 #include <ctime>
 
+typedef savvy::dense_genotype_vector<float>                   gt_vec;
+typedef savvy::dense_dosage_vector<float>                     ds_vec;
+typedef savvy::dense_genotype_likelihoods_vector<float>       gl_vec;
+typedef savvy::dense_phred_genotype_likelihoods_vector<float> pl_vec;
+
 class pCHAPSArgs {
 public:
   // VCF-related string arguments
@@ -90,6 +95,69 @@ int schr2nchr(const char* schr) {
   else { error("Cannot convert chromosome %s into PLINK format",schr); return 0; }
 }
 
+template <typename VecType>
+int runPairHMM(const pCHAPSArgs& arg, double mu, double theta) {
+  fVcf<VecType> tvcf;
+  tvcf.load(arg.vcf.c_str(), arg.region.c_str(), arg.field.c_str(), arg.rule.c_str(), !arg.ignoreFilter, arg.indf.empty() ? NULL : arg.indf.c_str());
+  int n = tvcf.nInds;
+  int m = 0;
+  int maxM = 1000;
+  std::vector<double> AFs;
+  std::vector<std::string> markers;
+  std::vector<int> pos1s;
+  uint8_t* PLs = new uint8_t[n * maxM * 3];
+  double af, maf;
+
+  for(int M = 0; tvcf.readMarkers(1); ++M) {
+    if ( M % 10000 == 0 )
+      notice("Processing %d/%d markers across %d individuals..\n", m, M, tvcf.nInds);
+    af = tvcf.alleleFreq(0);
+    maf = af > 0.5 ? 1-af : af;
+    if ( maf < 0 ) maf = 0;
+    if ( ( maf >= arg.minMAF ) && ( tvcf.callRate(0) >= arg.minCallRate ) && ( tvcf.sumAlleles[0] >= arg.minAC ) && ( tvcf.sumAlleles[0] <= arg.maxAC ) ) {
+      // see whether we reached maxM
+      if ( maxM == m ) {
+        notice("Expanding maxM from %d to %d", maxM, maxM*2);
+        uint8_t* cPLs = PLs;
+        PLs = new uint8_t[n * maxM * 6];
+        for(int i=0; i < n; ++i) {
+          memcpy( &PLs[i*maxM*6], &cPLs[i*maxM*3], sizeof(uint8_t) * (maxM *3) );
+        }
+        maxM *= 2;
+        delete [] cPLs;
+      }
+      pos1s.push_back(tvcf.pos1s[0]);
+      AFs.push_back(af);
+      markers.push_back(tvcf.markers[0]);
+      for(int i=0; i < n; ++i) {
+        PLs[i * maxM * 3 + m * 3 + 0] = tvcf.PLs[i*3];
+        PLs[i * maxM * 3 + m * 3 + 1] = tvcf.PLs[i*3+1];
+        PLs[i * maxM * 3 + m * 3 + 2] = tvcf.PLs[i*3+2];
+      }
+      ++m;
+    }
+  }
+  notice("Finished loading the genotype likelihoods across %d markers",m);
+
+  pcHMM pchmm(m, pos1s, AFs, mu, theta, .05, .001);
+  wFile wf(arg.outf.c_str());
+
+  writeChapsHeader(wf, markers, AFs, tvcf.inds, PLs, maxM);
+  for(int i=0; i < n; ++i) {
+    notice("Processing %s - index %d",tvcf.inds[i].c_str(),i+1);
+    for(int j=0; j < i; ++j) {
+      pchmm.viterbi( &PLs[j*maxM*3], &PLs[i*maxM*3] );
+      pchmm.writeViterbi(wf);
+      //wf.printf("%s\t%s",tvcf.inds[j].c_str(),tvcf.inds[i].c_str());
+      //pchmm.writeViterbi(wf, markers, tvcf.inds);
+    }
+    //if ( i == 2 ) break;
+  }
+  delete [] PLs;
+  wf.close();
+  return 0;
+}
+
 // run pairwise HMM to estimate the number of shared chromosomes
 int runPairHMM(int argc, char** argv) {
   pCHAPSArgs arg;
@@ -130,67 +198,15 @@ int runPairHMM(int argc, char** argv) {
     error("--vcf, --out are required parameters (--indf are also recommended)");
   }
 
-
-
-  fVcf tvcf;
-  tvcf.load(arg.vcf.c_str(), arg.region.c_str(), arg.field.c_str(), arg.rule.c_str(), !arg.ignoreFilter, arg.indf.empty() ? NULL : arg.indf.c_str());
-  int n = tvcf.nInds;
-  int m = 0;
-  int maxM = 1000;
-  std::vector<double> AFs;
-  std::vector<std::string> markers;
-  std::vector<int> pos1s;
-  uint8_t* PLs = new uint8_t[n * maxM * 3];
-  double af, maf;
- 
-  for(int M = 0; tvcf.readMarkers(1); ++M) {
-    if ( M % 10000 == 0 ) 
-      notice("Processing %d/%d markers across %d individuals..\n", m, M, tvcf.nInds);
-    af = tvcf.alleleFreq(0);
-    maf = af > 0.5 ? 1-af : af;
-    if ( maf < 0 ) maf = 0;
-    if ( ( maf >= arg.minMAF ) && ( tvcf.callRate(0) >= arg.minCallRate ) && ( tvcf.sumAlleles[0] >= arg.minAC ) && ( tvcf.sumAlleles[0] <= arg.maxAC ) ) {
-      // see whether we reached maxM
-      if ( maxM == m ) {
-	notice("Expanding maxM from %d to %d", maxM, maxM*2);
-	uint8_t* cPLs = PLs;
-	PLs = new uint8_t[n * maxM * 6];
-	for(int i=0; i < n; ++i) {
-	  memcpy( &PLs[i*maxM*6], &cPLs[i*maxM*3], sizeof(uint8_t) * (maxM *3) );
-	}
-	maxM *= 2;
-	delete [] cPLs;
-      }
-      pos1s.push_back(tvcf.pos1s[0]);
-      AFs.push_back(af);
-      markers.push_back(tvcf.markers[0]);
-      for(int i=0; i < n; ++i) {
-	PLs[i * maxM * 3 + m * 3 + 0] = tvcf.PLs[i*3];
-	PLs[i * maxM * 3 + m * 3 + 1] = tvcf.PLs[i*3+1];
-	PLs[i * maxM * 3 + m * 3 + 2] = tvcf.PLs[i*3+2];
-      }
-      ++m;
-    }
+  if (arg.field == "GT") return runPairHMM<gt_vec>(arg, mu, theta);
+  else if (arg.field == "PL") return runPairHMM<pl_vec>(arg, mu, theta);
+  else if (arg.field == "GL") return runPairHMM<gl_vec>(arg, mu, theta);
+  else if (arg.field == "DS" || arg.field == "EC") return runPairHMM<ds_vec>(arg, mu, theta);
+  else
+  {
+    error("%s not supported", arg.field.c_str());
+    return -1;
   }
-  notice("Finished loading the genotype likelihoods across %d markers",m);
-
-  pcHMM pchmm(m, pos1s, AFs, mu, theta, .05, .001);
-  wFile wf(arg.outf.c_str());
-
-  writeChapsHeader(wf, markers, AFs, tvcf.inds, PLs, maxM);
-  for(int i=0; i < n; ++i) {
-    notice("Processing %s - index %d",tvcf.inds[i].c_str(),i+1);
-    for(int j=0; j < i; ++j) {
-      pchmm.viterbi( &PLs[j*maxM*3], &PLs[i*maxM*3] );
-      pchmm.writeViterbi(wf);
-      //wf.printf("%s\t%s",tvcf.inds[j].c_str(),tvcf.inds[i].c_str());
-      //pchmm.writeViterbi(wf, markers, tvcf.inds);
-    }
-    //if ( i == 2 ) break;
-  }
-  delete [] PLs;
-  wf.close();
-  return 0;
 }
 
 int runBuildGraph(int argc, char** argv) {
