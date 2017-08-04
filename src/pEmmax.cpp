@@ -18,11 +18,6 @@
 
 #define DS_THRES 0.5
 
-typedef savvy::dense_genotype_vector<float>                   gt_vec;
-typedef savvy::dense_dosage_vector<float>                     ds_vec;
-typedef savvy::dense_genotype_likelihoods_vector<float>       gl_vec;
-typedef savvy::dense_phred_genotype_likelihoods_vector<float> pl_vec;
-
 using namespace Eigen;
 
 template <typename VecType>

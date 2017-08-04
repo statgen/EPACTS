@@ -21,6 +21,11 @@
 #include "boolParser.h"
 #include "PhredHelper.h"
 
+typedef savvy::dense_genotype_vector<float>                   gt_vec;
+typedef savvy::dense_dosage_vector<float>                     ds_vec;
+typedef savvy::dense_genotype_likelihoods_vector<float>       gl_vec;
+typedef savvy::dense_phred_genotype_likelihoods_vector<float> pl_vec;
+
 template<typename VecType>
 class fVcf {
 private:
@@ -429,186 +434,7 @@ public:
       sqAC = floor(2*AN*af*(1.+af)+.5); // assumes HWE sqAC = p^2 * 4 + 2p(1-p) = 2p(1+p)
     }
 
-    float f;
 
-//    for(i=0, j=0; pch != NULL; ++i) {
-//      nch = strchr(pch, '\t');
-//      if ( i < startIdx ) {
-//        if ( i < 7 ) {
-//          if ( nch == NULL ) s.assign( pch );
-//          else s.assign( pch, nch - pch );
-//
-//          switch(i) {
-//            case 0:                // copy chromosomes
-//              chrom = s; break;
-//            case 1:                // copy pos
-//              pos = s; break;
-//            case 2:                // marker_id
-//              markerId = s; break;
-//            case 3:                // reference allele
-//              ref = s; break;
-//            case 4:                // non-reference alleles
-//              alt = s;  // if it is not in the predefined markerSet, skip the marker
-//              if ( ! markerSet.empty() ) {
-//                markerKey = chrom+":"+pos+"_"+ref+"/"+alt;
-//                if ( markerSet.find(markerKey) == markerSet.end() ) {
-//                  return -1;
-//                }
-//              }
-//              break;
-//            case 6:
-//              if ( ( passOnly ) && ( s != "PASS" ) ) return -1;
-//          }
-//        }
-//        else if ( i == 7 ) { // parse INFO field
-//          if ( nch == NULL ) {
-//            // If the VCF is site only, parse AC & AN information
-//            // from the INFO field, if exists
-//            char* ic;
-//            AC = AN = 0;
-//            if ( (ic = strstr(pch, "AC=")) != NULL ) {
-//              AC = (float)atoi(ic+3);
-//            }
-//            if ( (ic = strstr(pch, "AN=")) != NULL ) {
-//              AN = atoi(ic+3);
-//            }
-//            if ( AN == 0 ) {
-//              error("AN is not observed in INFO field in site only VCF");
-//            }
-//            else {
-//              double af = (double)AC/(double)AN;
-//              sqAC = floor(2*AN*af*(1.+af)+.5); // assumes HWE sqAC = p^2 * 4 + 2p(1-p) = 2p(1+p)
-//            }
-//
-//            if ( !parser.parse( pch ) ) return -1;
-//          }
-//          else { if ( !parser.parse( pch, nch - pch ) ) return -1; }
-//        }
-//        else if ( i == 8 ) { // parse FORMAT field
-//          if ( pch[0] == key[0] && pch[1] == key[1] && ( ( nch == pch + 2 ) || ( pch[2] == ':' ) ) ) { // comparing two characters are not exactly right
-//            keyIdx = 0;
-//          }
-//          else if ( nch == NULL ) {
-//            error("VCF has FORMAT field but does not have any genotype");
-//          }
-//          else {
-//            k = 0;
-//            keyIdx = 0;
-//            p = pch;
-//            l = 0;
-//            while( p < nch ) {
-//              if ( *p == ':' ) {
-//                if (( k >= lKey ) && ( k == l )) {
-//                  break;
-//                }
-//                else {
-//                  ++keyIdx;
-//                  k = 0;
-//                  l = 0;
-//                }
-//              }
-//              else {
-//                //if ( ( k == 2 ) || ( key[k] == *p ) ) {
-//                if ( key[k] == *p ) {
-//                  ++k;
-//                }
-//                else {
-//                  k = 0;
-//                }
-//                ++l;
-//              }
-//              ++p;
-//            }
-//            if ( ( k != l ) || ( k != lKey ) ) {
-//              warning("Cannot find %s in the FORMAT field at marker %s:%s_%s/%s .. Skipping",key.c_str(),chrom.c_str(),pos.c_str(),ref.c_str(),alt.c_str());
-//              return -1;
-//            }
-//          }
-//        }
-//      }
-//      else {
-//        if ( icols.empty() || ( ( j < (int)icols.size() ) && ( icols[j] == i - startIdx ) ) ) {
-//          p = pch;
-//          n = NULL;
-//
-//          // reach to the key index
-//          if ( keyIdx > 0 ) {
-//            for(int i=0; (i < keyIdx) && (p != NULL); ++i) {
-//              n = strchr(p, ':');
-//              p = (n == NULL) ? NULL : n+1;
-//            }
-//          }
-//
-//          // if the field contains '/' or '|', add two values
-//          // if the field is '.', return NA
-//          // otherwise, convert the field into float and return
-//          if ( ( p == NULL ) || ( p[0] == '.' ) ) { // missing
-//            if ( glFlag ) {
-//              PLs.push_back(0);
-//              PLs.push_back(0);
-//              PLs.push_back(0);
-//            }
-//            else {
-//              genos.push_back(NAN_FLT);
-//              phases.push_back(0); // unphased
-//            }
-//          }
-//          else if ( ( p[1] == '/' ) || ( p[1] == '|' ) ) {
-//            f = (float)((p[0] - '0') + ( p[2] - '0' )); // ignore phase info
-//            genos.push_back(f);
-//            phases.push_back((p[1] == '|') ? ( (p[0] == p[2]) ? 1 : (p[0] < p[2] ? 2 : 3) ) : 0);
-//            AN += 2;
-//            AC += f;
-//            sqAC += f*f;
-//          }
-//          else { // Genotypes are not in 0|0 format
-//            if ( glFlag ) { // search for three commas
-//              char* c1 = strchr(p,',');
-//              if ( c1 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
-//              char* c2 = strchr(c1+1,',');
-//              if ( c2 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
-//              if ( phredFlag ) {
-//                int pl = atoi(p);
-//                if ( pl > 255 ) pl = 255;
-//                PLs.push_back(pl);
-//                pl = atoi(c1+1);
-//                if ( pl > 255 ) pl = 255;
-//                PLs.push_back(pl);
-//                pl = atoi(c2+1);
-//                if ( pl > 255 ) pl = 255;
-//                PLs.push_back(pl);
-//              }
-//              else {
-//                float gl = strtof(p,NULL);
-//                if ( gl < -25.5 ) PLs.push_back(255);
-//                else PLs.push_back((int)(-10*gl+.5));
-//
-//                gl = strtof(c1+1,NULL);
-//                if ( gl < -25.5 ) PLs.push_back(255);
-//                else PLs.push_back((int)(-10*gl+.5));
-//
-//                gl = strtof(c2+1,NULL);
-//                if ( gl < -25.5 ) PLs.push_back(255);
-//                else PLs.push_back((int)(-10*gl+.5));
-//              }
-//            }
-//            else {  // take genos as dosages
-//              f = strtof(p,NULL);
-//              genos.push_back(f);
-//              phases.push_back(0);
-//              AN += 2;
-//              AC += f;
-//              sqAC += f*f;
-//            }
-//          }
-//          ++j;
-//        }
-//        else {
-//          //std::cout << "Skipping " << i << "\t" << j << std::endl;
-//        }
-//      }
-//      pch = ( nch == NULL ) ? NULL : nch + 1;
-//    }
 
     j = var.size();
     if ( (nInds == 0) && icols.empty() && ((int)genos.size() == j) ) nInds = j;
@@ -618,46 +444,43 @@ public:
       abort();
     }
 
-    for (auto it = var.begin(); it != var.end(); ++it)
-    {
-      genos.push_back(*it);
-    }
+    loadGenos(var);
 
-//    // if GL or PL flag is set, automatically put dosage as quantitative genotypes
-//    if ( glFlag ) {
-//      //notice("fVcf::parseMarkers() - glFlag is on");
-//
-//      // set allele frequency
-//      int m = markers.size();  //notice("fVcf::parseMarkers() - m = %d",m);
-//      float af = (float)(emAF(m,1e-6).first); //notice("fVcf::parseMarkers() - af = %f",af);
-//      if ( (int)AFs.size() > m ) { AFs[m] = af; }
-//      else if ( (int)AFs.size() == m ) { AFs.push_back(af); }
-//      else { error("fVcf::parseMarkers() -- AFs.size() < m"); }
-//
-//      double p0,p1,p2;
-//      int kos;
-//      for(int k=0; k < j; ++k) {
-//        // calculate genotype dosages under HWE
-//        // Pr(G|D) = Pr(D|G)Pr(G)
-//        kos = 3*(m*nInds+k);
-//        p0 = phredConv.phred2Err[PLs[kos+0]] * (1.-AFs[m]) * (1.-AFs[m]);
-//        p1 = phredConv.phred2Err[PLs[kos+1]] * 2. * AFs[m] * (1.-AFs[m]);
-//        p2 = phredConv.phred2Err[PLs[kos+2]] * AFs[m] * AFs[m];
-//        if ( p0+p1+p2 > 0 ) {
-//          genos.push_back((p1+2*p2)/(p0+p1+p2));
-//          phases.push_back(0);
-//        }
-//        else {
-//          genos.push_back(AFs[m]*2.);
-//          phases.push_back(0);
-//        }
-//        if ( gpFlag ) { GPs.push_back(p0); GPs.push_back(p1); GPs.push_back(p2); }
-//
-//        AN += 2;
-//        AC += genos.back();
-//        sqAC += genos.back()*genos.back();
-//      }
-//    }
+    // if GL or PL flag is set, automatically put dosage as quantitative genotypes
+    if (std::is_same<VecType, gl_vec>::value || std::is_same<VecType, pl_vec>::value) {
+      //notice("fVcf::parseMarkers() - glFlag is on");
+
+      // set allele frequency
+      int m = markers.size();  //notice("fVcf::parseMarkers() - m = %d",m);
+      float af = (float)(emAF(m,1e-6).first); //notice("fVcf::parseMarkers() - af = %f",af);
+      if ( (int)AFs.size() > m ) { AFs[m] = af; }
+      else if ( (int)AFs.size() == m ) { AFs.push_back(af); }
+      else { error("fVcf::parseMarkers() -- AFs.size() < m"); }
+
+      double p0,p1,p2;
+      int kos;
+      for(int k=0; k < j; ++k) {
+        // calculate genotype dosages under HWE
+        // Pr(G|D) = Pr(D|G)Pr(G)
+        kos = 3*(m*nInds+k);
+        p0 = phredConv.phred2Err[PLs[kos+0]] * (1.-AFs[m]) * (1.-AFs[m]);
+        p1 = phredConv.phred2Err[PLs[kos+1]] * 2. * AFs[m] * (1.-AFs[m]);
+        p2 = phredConv.phred2Err[PLs[kos+2]] * AFs[m] * AFs[m];
+        if ( p0+p1+p2 > 0 ) {
+          genos.push_back((p1+2*p2)/(p0+p1+p2));
+          phases.push_back(0);
+        }
+        else {
+          genos.push_back(AFs[m]*2.);
+          phases.push_back(0);
+        }
+        if ( gpFlag ) { GPs.push_back(p0); GPs.push_back(p1); GPs.push_back(p2); }
+
+        AN += 2;
+        AC += genos.back();
+        sqAC += genos.back()*genos.back();
+      }
+    }
 
     //notice("AC=%f, AN=%d, sqAC=%f",AC,AN,sqAC);
 
@@ -1469,6 +1292,44 @@ public:
     //printf("%d\t%lf\t%lf\t%lf\n",m,llk0,llk1,llk1-llk0);
 
     return( 2*(llk1 - llk0) );
+  }
+private:
+  void loadGenos(const gt_vec& var)
+  {
+    for (auto it = var.begin(); it != var.end(); ++it)
+    {
+      genos.push_back(*it);
+      phases.push_back(0);
+    }
+  }
+
+  void loadGenos(const ds_vec& var)
+  {
+    for (auto it = var.begin(); it != var.end(); ++it)
+    {
+      genos.push_back(*it);
+      phases.push_back(0);
+    }
+  }
+
+  void loadGenos(const gl_vec& var)
+  {
+    for (auto it = var.begin(); it != var.end(); ++it)
+    {
+      if ( *it < -25.5 ) PLs.push_back(255);
+      else PLs.push_back((std::uint8_t)(-10 * (*it) + 0.5));
+    }
+  }
+
+  void loadGenos(const pl_vec& var)
+  {
+    for (auto it = var.begin(); it != var.end(); ++it)
+    {
+      int pl = *it;
+      if (pl > 255)
+        pl = 255;
+      PLs.push_back((std::uint8_t)pl);
+    }
   }
 };
 

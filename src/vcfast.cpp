@@ -25,11 +25,6 @@
 
 #define WINDOW_SIZE 65536
 
-typedef savvy::dense_genotype_vector<float>                   gt_vec;
-typedef savvy::dense_dosage_vector<float>                     ds_vec;
-typedef savvy::dense_genotype_likelihoods_vector<float>       gl_vec;
-typedef savvy::dense_phred_genotype_likelihoods_vector<float> pl_vec;
-
 class pVPHArgs {
 public:
   // VCF-related string arguments

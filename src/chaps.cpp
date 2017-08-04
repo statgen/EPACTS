@@ -13,11 +13,6 @@
 #include <getopt.h>
 #include <ctime>
 
-typedef savvy::dense_genotype_vector<float>                   gt_vec;
-typedef savvy::dense_dosage_vector<float>                     ds_vec;
-typedef savvy::dense_genotype_likelihoods_vector<float>       gl_vec;
-typedef savvy::dense_phred_genotype_likelihoods_vector<float> pl_vec;
-
 class pCHAPSArgs {
 public:
   // VCF-related string arguments
