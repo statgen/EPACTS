@@ -393,7 +393,7 @@ print MAK "\t$epactsdir/bin/epacts-cat @tgts | $epactsdir/bin/bgzip -c > $out.ep
 print MAK "\t$epactsdir/bin/tabix -f -pbed $out.epacts.gz\n";
 print MAK "\t$binrm -f @tgts\n";
 unless ( $noplot ) {
-    print MAK "\t$epactsdir/bin/epacts-plot --in $out.epacts.gz".(($chr) ? " --region $chr:0" : "")."\n";
+    print MAK "\t$epactsdir/bin/epacts-plot --ref $ref --in $out.epacts.gz".(($chr) ? " --region $chr:0" : "")."\n";
 }
 if ( $topzoom > 0 ) {
     print MAK "\t$epactsdir/bin/epacts-zoom --vcf $vcf --prefix $out --top $topzoom ".($sepchr ? " --sepchr" : "")."\n";

@@ -10,9 +10,12 @@ use epacts qw(@chrs @szchrs @cumszchrsMb parsePheno getMosixCmd schr2nchr vcfSam
 
 my $vcf = "";
 my $out = "";
-my $format = "epacts";
+my $format = "ANN";
 my @types = ();
 my $nonsyn = "";
+my $lof = "";
+my $high = "";
+my $moderate = "";
 my $pass = "";
 my $typefield = "";
 my $genefield = "";
@@ -30,9 +33,8 @@ wGetOptions(
 	     ],
     "--Additional Options",
     "format=s",[\$format,
-		"Annotation format (epacts,annovar,gatk,snpeff,chaos)",
-		"Annotation format. Default format is 'epacts', and following is accepted\n B<epacts>   : ANNO=[TYPE]:[GENE]\n B<annovar>  : ANNO=[TYPE]:[GENE]\n B<gatk>     : refSeq.functionalClass=[TYPE] & refseq.name2=[GENE]\n B<snpeff>   : SNPEFF_FUNCTIONAL_CLASS=[TYPE] & SNPEFF_GENE_NAME=[GENE]\n B<chaos>    : TYPE=[TYPE] & GENE=[GENE]",
-               ],
+		"Annotation format current supports epacts and ANN field (from snpEff)",
+		"Annotation format. Default format is 'snpeff', and following is accepted\n B<epacts>   : ANNO=[TYPE]:[GENE]\n B<snpeff>  : ANN=[ALLELE]|[TYPE]|[IMPACT]|[GENE]"],
     "type=s",[\@types,
                 "Functional type(s) to include",
 	      ],
@@ -45,8 +47,17 @@ wGetOptions(
 		   "Custom field name in the VCF INFO field to be used as gene name",
 		   ],
     "nonsyn",[\$nonsyn,
-	      "Use predefined nonsynonymous SNP categories",
-	      "Use predefined sets of TYPE field to be considered as non-synonymous SNPs\n B<epacts>   : Nonsynonymous, Essential_Splice_Site, Normal_Splice_Site,Start_Loss, Stop_Loss, Stop_Gain\n B<annovar>  : nonsynonymous, stopgain, stoploss, splicing\n B<gatk>     : missense, nonsense, readthrough\n B<snpeff>   : MISSENSE, NONSENSE\n B<chaos>    : COMPLETE_GENE_DELETETION, PARTIAL_GENE_DELETION, WITHIN_GENE_DELETTION, MISSENSE_START, NONSENSE, FRAMESHIFT, DONOR_IN2, ACCEPTOR_N2, CREATE_ACCEPTER_IN15,READTHROUGH, MISSENSE"],
+	      "Use predefined LoF variant categories",
+	      "Use predefined sets of TYPE field to be considered as non-synonymous SNPs\n B<epacts>   : Nonsynonymous, Essential_Splice_Site, Normal_Splice_Site,Start_Loss, Stop_Loss, Stop_Gain\n B<ANN>  : chromosome_number_variation, exon_loss_variant, frameshift_variant, rare_amino_acid_variant, splice_acceptor_variant, splice_donor_variant, start_lost, stop_gained, stop_lost, transcript_ablation, coding_sequence_variant, disruptive_inframe_deletion, disruptive_inframe_insertion, inframe_deletion, inframe_insertion, missense_variant"],
+    "lof",[\$lof,
+	      "Use predefined LoF variant categories",
+	   "Use predefined LoF variant categories"],
+    "high",[\$high,
+	      "Use predefined HIGH impact variant categories",
+	      "Use predefined HIGH impact variant categories"],
+    "moderate",[\$lof,
+	      "Use predefined MODERATE+HIGH variant categories",
+	      "Use predefined MODERATE+HIGH variant categories"],    
     "pass",[\$pass,
 	    "Use PASS-filtered SNPs",
 	    "Ignore SNPs failed filter, and output only the SNPs with 'PASS' in the INFO field"
@@ -65,29 +76,69 @@ if ( ($format) && ($typefield) && ($genefield) ) {
 
 my $epactsdir = "$FindBin::Bin/..";
 
-if ( $nonsyn ) {
+die "--nonsyn, --lof, --high, --moderate cannot be used together" if ( ( $nonsyn ? 1 : 0 ) + ( $lof ? 1 : 0 ) + ( $high ? 1 : 0 ) + ( $moderate ? 1 : 0 ) > 1 );
+
+if ( $lof ) {
     if ( $#types >= 0 ) {
 	print STDERR "ERROR: Cannot use --nonsyn and --type options together\n";
 	wpod2usage(2);
     }
     if ( $format eq "epacts" ) {
-	@types = qw(Nonsynonymous Essential_Splice_Site Normal_Splice_Site Start_Loss Stop_Loss Stop_Gain); # or synonymous
+	@types = qw(Essential_Splice_Site Start_Loss Stop_Gain); # or synonymous
     }
-    elsif ( $format eq "umake" ) {
-	@types = qw(nonsynonymous stopgain stoploss splicing); # or synonymous
+    elsif ( $format eq "ANN" ) {
+	@types = qw(chromosome_number_variation exon_loss_variant frameshift_variant rare_amino_acid_variant splice_acceptor_variant splice_donor_variant start_lost stop_gained transcript_ablation);
     }
-    elsif ( $format eq "GATK" ) {
-	@types = qw(missense nonsense readthrough);  # or silent
+    elsif ( $format eq "" ) {
+	print STDERR "ERROR: --nonsyn option is not compatible with --format option";
+    }    
+}
+elsif ( $nonsyn ) {
+    if ( $#types >= 0 ) {
+	print STDERR "ERROR: Cannot use --nonsyn and --type options together\n";
+	wpod2usage(2);
     }
-    elsif ( $format eq "snpeff" ) {
-	@types = qw(MISSENSE NONSENSE);  # or silent
+    if ( $format eq "epacts" ) {
+	@types = qw(Nonsynonymous Essential_Splice_Site Start_Loss Stop_Loss Stop_Gain); # or synonymous
     }
-    elsif ( $format eq "chaos") {
-	@types = qw(COMPLETE_GENE_DELETION PARTIAL_GENE_DELETION WITHIN_GENE_DELETION MISSENSE_START NONSENSE FRAMESHIFT DONOR_IN2 ACCEPTOR_IN2 CREATE_ACCEPTOR_IN15 READTHROUGH MISSENSE); 
+    elsif ( $format eq "ANN" ) {
+	@types = qw(chromosome_number_variation exon_loss_variant frameshift_variant rare_amino_acid_variant splice_acceptor_variant splice_donor_variant start_lost stop_gained stop_lost transcript_ablation coding_sequence_variant disruptive_inframe_deletion disruptive_inframe_insertion inframe_deletion inframe_insertion missense_variant);
     }
     elsif ( $format eq "" ) {
 	print STDERR "ERROR: --nonsyn option is not compatible with --format option";
     }
+}
+elsif ( $high ) {
+    if ( $#types >= 0 ) {
+	print STDERR "ERROR: Cannot use --nonsyn and --type options together\n";
+	wpod2usage(2);
+    }
+    if ( $format eq "epacts" ) {
+	print STDERR "ERROR: Cannot use --high and --format epacts together\n";
+	wpod2usage(2);
+    }
+    elsif ( $format eq "ANN" ) {
+	@types = qw(chromosome_number_variation exon_loss_variant frameshift_variant rare_amino_acid_variant splice_acceptor_variant splice_donor_variant start_lost stop_gained stop_lost transcript_ablation);
+    }
+    elsif ( $format eq "" ) {
+	print STDERR "ERROR: --nonsyn option is not compatible with --format option";
+    }    
+}
+elsif ( $moderate ) {
+    if ( $#types >= 0 ) {
+	print STDERR "ERROR: Cannot use --nonsyn and --type options together\n";
+	wpod2usage(2);
+    }
+    if ( $format eq "epacts" ) {
+	print STDERR "ERROR: Cannot use --moderate and --format epacts together\n";
+	wpod2usage(2);
+    }
+    elsif ( $format eq "ANN" ) {
+	@types = qw(chromosome_number_variation exon_loss_variant frameshift_variant rare_amino_acid_variant splice_acceptor_variant splice_donor_variant start_lost stop_gained stop_lost transcript_ablation coding_sequence_variant disruptive_inframe_deletion disruptive_inframe_insertion inframe_deletion inframe_insertion missense_variant regulatory_region_abaltion splice_region_variant TFBS_ablation);
+    }
+    elsif ( $format eq "" ) {
+	print STDERR "ERROR: --nonsyn option is not compatible with --format option";
+    }    
 }
 
 if ( $vcf =~ /.gz$/ ) {
@@ -103,6 +154,8 @@ foreach my $t (@types) { $htypes{$t} = 1; }
 my %hgrp = ();
 while(<IN>) {
     my @F = split(/[\t\r\n]/);
+    print STDERR "Processing $F[0]:$F[1]..\n" if ( $. % 1000000 == 0 );
+    
     next if ( ( $pass ) && ( $F[6] ne "PASS" ) );
     my ($type,$gene);
     if ( ( $typefield ) && ( $genefield ) ) {
@@ -110,24 +163,14 @@ while(<IN>) {
 	$gene = $1 if ( /;$genefield=([^;:]+)/ );
     }
     elsif ( $format eq "epacts" ) {
-	($type,$gene) = ($1,$2) if ( /ANNO=([^:]+):([^:;]+)/ );
+	($type,$gene) = ($1,$2) if ( $F[7] =~ /ANNO=([^:]+):([^:;]+)/ );
     }
-    elsif ( $format eq "umake" ) {
-	($type,$gene) = ($1,$2) if ( /ANNO=([^:]+):([^:]+)/ );
+    elsif ( $format eq "ANN" ) {
+	($type,$gene) = ($1,$2) if ( $F[7] =~ /;ANN=[^\|]+\|([^\|]+)\|[^\|]+\|([^\|]+)\|/ );
     }
-    elsif ( $format eq "chaos") {
-	$type = $1 if ( /;TYPE=([^;:]+)/ );
-	$gene = $1 if ( /;GENE=([^;:]+)/ );
-    }
-    elsif ( $format eq "snpeff" ) {
-	$type = $1 if ( /SNPEFF_FUNCTIONAL_CLASS=([^;]+)/ );
-	$gene = $1 if ( /SNPEFF_GENE_NAME=([^;]+);/)
-    }
-    elsif ( $format eq "GATK" ) {
-	$type = $1 if ( /refseq.functionalClass=([^;]+)/ );
-	$gene = $1 if ( /refseq.name2=([^;]+);/)
-    }
+    #print STDERR "$type $gene\n";
     next if ( !defined($gene) );
+    $type =~ s/\&.*$//;
     if ( defined($htypes{$type}) ) {
 	my $marker = "$F[0]:$F[1]\_$F[3]/$F[4]";
 	my @genes = split(/[,\|]/,$gene);

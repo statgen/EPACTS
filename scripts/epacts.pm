@@ -635,7 +635,7 @@ sub initRef {
 	@szchrs = ();
 	@cumszchrsMb = (0);
 	my @sortedAutoChrs = sort {$a <=> $b} @autoChrs;
-	foreach my $c (@sortedAutoChrs) {
+	foreach my $c (@sortedAutoChrs,"X","Y") {
 	    push(@chrs, ($chrPrefix == 1) ? "chr$c" : $c);
 	    push(@szchrs, $hszchrs{$chrs[$#chrs]}->[3]);
 	    my $newcumszMb = $szchrs[$#szchrs]/1e6 + $cumszchrsMb[$#cumszchrsMb];

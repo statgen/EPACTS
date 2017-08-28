@@ -30,6 +30,10 @@ test <- args[17]
 if ( test == "single.q.emmaxR" ) {  ## special treatment for emmaxR
   eigf <- args[18]
   remlf <- args[19]
+} else if ( test == "single.b.spagmmat" ) {
+  varRatio <- args[18]
+  obj.SA.null.file <- args[19]
+  formula <- args[20]
 }
 
 setwd(paste(bindir,"/share/EPACTS",sep=""))
@@ -140,7 +144,7 @@ if ( m > 0 ) {
     })
     out <- out[which(goodnames), ]
     cat(paste(sum(!goodnames), 'variants have been excluded due to error: "Value of SET_STRING_ELT() must be a \'CHARSXP\' not a \'integer\'"'), file = paste0(outf, ".log"))
-  } else {}
+  } ##else {}
   
   print(warnings())
   .Call("writeMatrix",out,outf)
