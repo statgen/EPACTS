@@ -56,6 +56,7 @@ if ( covf == "NULL" ) {
 binaryFlag <- is.binary(pheno)
 
 ind <- as.integer(read.table(indf)[,2])-1
+#indids <- as.character(read.table(indf)[,1])
 
 G <- .Call("readVcf",vcf,region,field,passOnly,ind,NULL)
 rnames <- rownames(G)
