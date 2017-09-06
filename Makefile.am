@@ -8,5 +8,5 @@ SUBDIRS = src data scripts
 
 install-exec-hook:
 	mkdir --p $(libdir)
-	R CMD INSTALL -l $(libdir) $(datadir)/${PACKAGE}/epactsR_3.3.2.tar.gz
+	R CMD INSTALL -l $(libdir) $(datadir)/${PACKAGE}/epactsR_3.3.3.tar.gz
 	R CMD INSTALL -l $(libdir) $(datadir)/${PACKAGE}/mmSKAT_0.95.tar.gz
