@@ -1,5 +1,4 @@
 dist_pkgdata_DATA = epactsSingle.R epactsGroup.R epactsMulti.R mmSKAT_0.95.tar.gz \
-	SPAGMMAT_0.1.tar.gz single.b.spagmmat.R single.q.spagmmat.R \
 	group.b.collapse.R group.b.madsen.R group.q.reverse.R group.skat.R group.b.burden.R \
 	group.mmskat.R group.b.wcnt.R group.q.wilcox.R \
 	single.b.firth.R single.b.firthCov.R single.b.wald.R single.q.reverse.R \
