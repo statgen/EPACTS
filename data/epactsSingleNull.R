@@ -49,7 +49,7 @@ ScoreTest_wSaddleApprox_NULL_Model <- function(formula, data=NULL)
 	XVX_inv= solve(t(X1)%*%(X1 * V))
 	XXVX_inv= X1 %*% XVX_inv   
 	
-	re<-list(y=glmfit$y, mu=mu, res=res, V=V, X1=X1, XV=XV, XXVX_inv =XXVX_inv)
+	re<-list(y=glmfit$y, cov=X1, mu=mu, res=res, V=V, X1=X1, XV=XV, XXVX_inv =XXVX_inv)
 	class(re)<-"SA_NULL"
 	return(re)	
 }
