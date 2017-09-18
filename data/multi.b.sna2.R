@@ -1,0 +1,701 @@
+## Core functions of pugwash to perform association
+
+##################################################################
+## SINGLE VARIANT TEST
+## INPUT VARIABLES:
+##   n        : total # of individuals
+##   NS       : number of called samples
+##   AC       : allele count
+##   MAF      : minor allele frequency
+##   vids     : indices from 1:n after AF/AC threshold
+##   genos    : genotype matrix (after AF/AC threshold)
+## EXPECTED OUTPUT : list(p, addcols, addnames) for each genos row
+##   p        : p-value
+##   addcols  : additional columns (with proper column names)
+##################################################################
+
+ScoreTest_wSaddleApprox_Get_X1 = function(X1)
+{
+	q1<-ncol(X1)
+	if(q1>=2)
+	{
+		if(sum(abs(X1[,1]-X1[,2]))==0)
+		{
+			X1=X1[,-2]
+			q1<-q1-1
+		}
+	}
+	qr1<-qr(X1)
+	if(qr1$rank < q1){
+		
+		X1.svd<-svd(X1)
+		X1 = X1.svd$u[,1:qr1$rank]
+	} 
+
+	return(X1)
+}
+
+
+ScoreTest_wSaddleApprox_NULL_Model <- function(formula, data=NULL)
+{
+	X1<-model.matrix(formula,data=data)
+	X1<-ScoreTest_wSaddleApprox_Get_X1(X1)
+	
+	glmfit= glm(formula, data=data, family = "binomial")
+  	mu    = glmfit$fitted.values
+	V = mu*(1-mu)
+  	res = glmfit$y- mu
+	n1<-length(res)
+	
+	XV = t(X1 * V)
+	XVX_inv= solve(t(X1)%*%(X1 * V))
+	XXVX_inv= X1 %*% XVX_inv   
+	
+	re<-list(y=glmfit$y, cov=X1, mu=mu, res=res, V=V, X1=X1, XV=XV, XXVX_inv =XXVX_inv)
+	class(re)<-"SA_NULL"
+	return(re)	
+}
+
+Korg<-function(t, mu, g)
+{
+	n.t<-length(t)
+	out<-rep(0,n.t)
+	
+	for(i in 1:n.t){
+		t1<-t[i]
+		temp<-log(1 - mu + mu * exp(g* t1))
+		out[i]<-sum(temp)
+	}
+	return(out)
+}
+
+
+K1_adj<-function(t, mu, g, q)
+{
+	n.t<-length(t)	
+	out<-rep(0,n.t)
+	
+	for(i in 1:n.t){
+		t1<-t[i]
+		temp1<-(1 - mu)* exp(-g * t1) + mu
+		temp2<-mu *g
+		out[i]<-sum(temp2/temp1)-q
+	}
+	return(out)
+}
+
+K2<-function(t, mu, g)
+{
+	n.t<-length(t)
+	out<-rep(0,n.t)
+	
+	for(i in 1:n.t){
+		t1<-t[i]
+		temp1<-((1 - mu)* exp(-g * t1) + mu)^2
+		temp2<-(1-mu) * mu * g^2 * exp(-g*t1)
+		out[i]<-sum(temp2/temp1,na.rm=TRUE)
+	}
+	return(out)
+}
+
+getroot_K1<-function(init,mu,g,q,m1,tol=.Machine$double.eps^0.25,maxiter=1000)
+{
+	g.pos<-sum(g[which(g>0)])
+	g.neg<- sum(g[which(g<0)])
+	if(q>=g.pos || q<=g.neg)
+	{
+		return(list(root=Inf,n.iter=0,Is.converge=TRUE))
+	} else {
+		t<-init
+		K1_eval<-K1_adj(t,mu,g,q)
+		prevJump<- Inf
+		rep<-1
+		repeat
+		{
+			K2_eval<-K2(t,mu,g)
+			tnew<-t-K1_eval/K2_eval
+			if(is.na(tnew))
+			{
+				conv=FALSE
+				break
+			}
+			if(abs(tnew-t)<tol)
+			{
+				conv<-TRUE
+				break
+			}
+			if(rep==maxiter)
+			{
+				conv<-FALSE
+				break
+			}
+
+			newK1<-K1_adj(tnew,mu,g,q)
+			if(sign(K1_eval)!=sign(newK1))
+			{
+				if(abs(tnew-t)>prevJump-tol)
+				{
+					tnew<-t+sign(newK1-K1_eval)*prevJump/2
+					newK1<-K1_adj(tnew,mu,g,q)
+					prevJump<-prevJump/2
+				} else {
+					prevJump<-abs(tnew-t)
+				}
+			}
+
+			rep<-rep+1
+			t<-tnew
+			K1_eval<-newK1
+		}
+		return(list(root=t,n.iter=rep,Is.converge=conv))
+	}
+}
+
+Get_Saddle_Prob<-function(zeta, mu, g, q) 
+{
+	k1<-Korg(zeta, mu, g)
+	k2<-K2(zeta, mu, g)
+	
+	if(is.finite(k1) && is.finite(k2))
+	{
+	temp1<-zeta * q - k1
+
+	
+	w<-sign(zeta) * (2 *temp1)^{1/2}
+	v<- zeta * (k2)^{1/2}
+			
+	Z.test<-w + 1/w * log(v/w)	
+	
+	if(Z.test > 0){
+		pval<-pnorm(Z.test, lower.tail = FALSE)
+	} else {
+		pval<-pnorm(Z.test, lower.tail = TRUE)
+	}	
+	} else {
+	pval<-0
+	}
+	
+	return(pval)
+}
+	
+Saddle_Prob<-function(q, mu, g, Cutoff=2,alpha)
+{
+	m1<-sum(mu * g)
+	var1<-sum(mu * (1-mu) * g^2)
+	p1=NULL
+	p2=NULL
+
+	#
+	qinv = -sign(q-m1) * abs(q-m1) + m1
+
+	# Noadj
+	pval.noadj<-pchisq((q - m1)^2/var1, lower.tail = FALSE, df=1)
+	Is.converge=TRUE
+
+ 	if(Cutoff=="BE"){
+		rho<-sum(((abs(g))^3)*mu*(1-mu)*(mu^2+(1-mu)^2))
+		B<-0.56*rho*var1^(-3/2)
+		p<-B+alpha/2
+		Cutoff=ifelse(p>=0.496,0.01,qnorm(p,lower.tail=F))
+	} else if(Cutoff < 10^-1){
+		Cutoff=10^-1
+	} 			
+	#
+
+	if(abs(q - m1)/sqrt(var1) < Cutoff){
+
+		pval=pval.noadj
+		
+	} else {
+		out.uni1<-getroot_K1(0, mu=mu, g=g, q=q)
+		out.uni2<-getroot_K1(0, mu=mu, g=g, q=qinv)
+		if(out.uni1$Is.converge==TRUE && out.uni2$Is.converge==TRUE)
+		{
+			p1<-Get_Saddle_Prob(out.uni1$root, mu, g, q)
+			p2<-Get_Saddle_Prob(out.uni2$root, mu, g, qinv)
+			pval = p1+p2
+			Is.converge=TRUE
+		} else {
+ 			print("Error_Converge")
+			pval<-pval.noadj
+			Is.converge=FALSE	
+		}				
+	}
+
+	if(pval!=0 && pval.noadj/pval>10^3)
+	{
+		return(Saddle_Prob(q, mu, g, Cutoff=Cutoff*2,alpha))
+	} else {
+		return(list(p.value=pval, p.value.NA=pval.noadj, Is.converge=Is.converge, p1=p1, p2=p2))
+	}
+
+}
+
+TestSPA<-function(G, obj.null, Cutoff=2,alpha)
+{
+	if(class(obj.null) != "SA_NULL"){
+		stop("obj.null should be a returned object from ScoreTest_wSaddleApprox_NULL_Model")
+	}
+	
+	y = obj.null$y
+	mu = obj.null$mu
+	res = obj.null$res
+	
+	n.g<-sum(G)
+	if(n.g/(2*length(G))>0.5)
+	{
+		G<-2-G
+		n.g<-sum(G)
+	}
+	G1<-G  -  obj.null$XXVX_inv %*%  (obj.null$XV %*% G)
+	q<-sum(G1 * y) /sqrt(n.g)
+	out<-Saddle_Prob(q, mu=mu, g=G1/sqrt(n.g), Cutoff=Cutoff,alpha=alpha)
+
+	return(out)
+}
+
+Korg_fast<-function(t, mu, g,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+{
+	n.t<-length(t)
+	out<-rep(0,n.t)
+	
+	for(i in 1:n.t){
+		t1<-t[i]
+		temp<-log(1 - muNB + muNB * exp(gNB* t1))
+		out[i]<-sum(temp)+NAmu*t1+0.5*NAsigma*t1^2
+	}
+	return(out)
+}
+
+
+K1_adj_fast<-function(t, mu, g, q,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+{
+	n.t<-length(t)	
+	out<-rep(0,n.t)
+	
+	for(i in 1:n.t){
+		t1<-t[i]
+		temp1<-(1 - muNB)* exp(-gNB * t1) + muNB
+		temp2<-muNB *gNB
+		temp3<-NAmu+NAsigma*t1
+		out[i]<-sum(temp2/temp1)+temp3-q
+	}
+	return(out)
+}
+
+K2_fast<-function(t, mu, g,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+{
+	n.t<-length(t)
+	out<-rep(0,n.t)
+	
+	for(i in 1:n.t){
+		t1<-t[i]
+		temp1<-((1 - muNB)* exp(-gNB * t1) + muNB)^2
+		temp2<-(1-muNB) * muNB * gNB^2 * exp(-gNB*t1)
+		out[i]<-sum(temp2/temp1,na.rm=TRUE)+NAsigma
+	}
+	return(out)
+}
+
+getroot_K1_fast<-function(init,mu,g,q,m1,gNA,gNB,muNA,muNB,NAmu,NAsigma,tol=.Machine$double.eps^0.25,maxiter=1000)
+{
+	g.pos<-sum(g[which(g>0)])
+	g.neg<- sum(g[which(g<0)])
+	if(q>=g.pos || q<=g.neg)
+	{
+		return(list(root=Inf,n.iter=0,Is.converge=TRUE))
+	} else {
+		t<-init
+		K1_eval<-K1_adj_fast(t,mu,g,q,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+		prevJump<- Inf
+		rep<-1
+		repeat
+		{
+			K2_eval<-K2_fast(t,mu,g,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+			tnew<-t-K1_eval/K2_eval
+			if(is.na(tnew))
+			{
+				conv=FALSE
+				break
+			}
+			if(abs(tnew-t)<tol)
+			{
+				conv<-TRUE
+				break
+			}
+			if(rep==maxiter)
+			{
+				conv<-FALSE
+				break
+			}
+
+			newK1<-K1_adj_fast(tnew,mu,g,q,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+			if(sign(K1_eval)!=sign(newK1))
+			{
+				if(abs(tnew-t)>prevJump-tol)
+				{
+					tnew<-t+sign(newK1-K1_eval)*prevJump/2
+					newK1<-K1_adj_fast(tnew,mu,g,q,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+					prevJump<-prevJump/2
+				} else {
+					prevJump<-abs(tnew-t)
+				}
+			}
+
+			rep<-rep+1
+			t<-tnew
+			K1_eval<-newK1
+		}
+		return(list(root=t,n.iter=rep,Is.converge=conv))
+	}
+}
+
+Get_Saddle_Prob_fast<-function(zeta, mu, g, q,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+{
+	k1<-Korg_fast(zeta, mu, g,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+	k2<-K2_fast(zeta, mu, g,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+	
+	if(is.finite(k1) && is.finite(k2))
+	{
+	temp1<-zeta * q - k1
+
+	
+	w<-sign(zeta) * (2 *temp1)^{1/2}
+	v<- zeta * (k2)^{1/2}
+			
+	Z.test<-w + 1/w * log(v/w)	
+	
+	if(Z.test > 0){
+		pval<-pnorm(Z.test, lower.tail = FALSE)
+	} else {
+		pval<-pnorm(Z.test, lower.tail = TRUE)
+	}	
+	} else {
+	pval<-0
+	}
+	
+	return(pval)
+}
+
+Saddle_Prob_fast<-function(q, g,mu,gNA,gNB,muNA,muNB,Cutoff=2,alpha)
+{
+	m1<-sum(mu * g)
+	var1<-sum(mu * (1-mu) * g^2)
+	p1=NULL
+	p2=NULL
+
+	#
+	qinv = -sign(q-m1) * abs(q-m1) + m1
+
+	# Noadj
+	pval.noadj<-pchisq((q - m1)^2/var1, lower.tail = FALSE, df=1)
+	Is.converge=TRUE
+
+	if(Cutoff=="BE"){
+		rho<-sum(((abs(g))^3)*mu*(1-mu)*(mu^2+(1-mu)^2))
+		B<-0.56*rho*var1^(-3/2)
+		p<-B+alpha/2
+		Cutoff=ifelse(p>=0.496,0.01,qnorm(p,lower.tail=F))
+	} else if(Cutoff < 10^-1){
+		Cutoff=10^-1
+	} 
+			
+	#
+	
+	if(abs(q - m1)/sqrt(var1) < Cutoff){
+
+		pval=pval.noadj
+		
+	} else {
+		NAmu= m1-sum(gNB*muNB)
+		NAsigma=var1-sum(muNB*(1-muNB)*gNB^2)
+		out.uni1<-getroot_K1_fast(0, mu=mu, g=g, q=q,gNA=gNA,gNB=gNB,muNA=muNA,muNB=muNB,NAmu=NAmu,NAsigma=NAsigma)
+		out.uni2<-getroot_K1_fast(0, mu=mu, g=g, q=qinv,gNA=gNA,gNB=gNB,muNA=muNA,muNB=muNB,NAmu=NAmu,NAsigma=NAsigma)
+		if(out.uni1$Is.converge==TRUE && out.uni2$Is.converge==TRUE)
+		{
+			p1<-Get_Saddle_Prob_fast(out.uni1$root, mu, g, q,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+			p2<-Get_Saddle_Prob_fast(out.uni2$root, mu, g, qinv,gNA,gNB,muNA,muNB,NAmu,NAsigma)
+			pval = p1+p2
+			Is.converge=TRUE
+		} else {
+ 			print("Error_Converge")
+			pval<-pval.noadj
+			Is.converge=FALSE	
+		}		
+		
+	}
+
+	if(pval!=0 && pval.noadj/pval>10^3)
+	{
+		return(Saddle_Prob_fast(q, g,mu,gNA,gNB,muNA,muNB,Cutoff=Cutoff*2,alpha))
+	} else {
+		return(list(p.value=pval, p.value.NA=pval.noadj, Is.converge=Is.converge, p1=p1, p2=p2))
+	}
+
+}
+
+TestSPAfast<-function(G, obj.null, Cutoff=2,alpha)
+{
+	if(class(obj.null) != "SA_NULL"){
+		stop("obj.null should be a returned object from ScoreTest_wSaddleApprox_NULL_Model")
+	}
+	
+	y = obj.null$y
+	mu = obj.null$mu
+	res = obj.null$res
+	
+	n.g<-sum(G)
+	if(n.g/(2*length(G))>0.5)
+	{
+		G<-2-G
+		n.g<-sum(G)
+	}
+	NAset<-which(G==0)
+	G1<-G  -  obj.null$XXVX_inv %*%  (obj.null$XV %*% G)
+	q<-sum(G1 * y) /sqrt(n.g)
+	g=G1/sqrt(n.g)
+	if(length(NAset)/length(G)<0.5)
+	{
+		out<-Saddle_Prob(q, mu=mu, g=G1/sqrt(n.g), Cutoff=Cutoff,alpha=alpha)
+
+	} else {
+
+	out<-Saddle_Prob_fast(q,g=g,mu=mu,gNA=g[NAset],gNB=g[-NAset],
+muNA=mu[NAset],muNB=mu[-NAset],Cutoff=Cutoff,alpha=alpha)
+	}
+	return(out)
+}
+
+
+
+fast.logistf.fit <- function (x, y, weight = NULL, offset = NULL, firth = TRUE, col.fit = NULL, 
+    init = NULL, control) {
+    n <- nrow(x)
+    k <- ncol(x)
+    if (is.null(init)) 
+        init = rep(0, k)
+    if (is.null(col.fit)) 
+        col.fit = 1:k
+    if (is.null(offset)) 
+        offset = rep(0, n)
+    if (is.null(weight)) 
+        weight = rep(1, n)
+    if (col.fit[1] == 0) 
+        maxit <- 0
+    if (missing(control)) 
+        control <- fast.logistf.control()
+    maxit <- control$maxit
+    maxstep <- control$maxstep
+    maxhs <- control$maxhs
+    lconv <- control$lconv
+    gconv <- control$gconv
+    xconv <- control$xconv
+    beta <- init
+    iter <- 0
+    pi <- as.vector(1/(1 + exp(-x %*% beta - offset)))
+    evals <- 1
+    repeat {
+        beta.old <- beta
+        XW2 <- t(x * (weight * pi * (1-pi))^0.5)
+        myQR <- qr(t(XW2))
+        Q <- qr.Q(myQR)
+        h <- (Q*Q) %*% rep(1, ncol(Q))        
+        if (firth) 
+            U.star <- crossprod(x, weight * (y - pi) + h * (0.5 - pi))
+        else U.star <- crossprod(x, weight * (y - pi))
+        XX.covs <- matrix(0, k, k)
+        if (col.fit[1] != 0) {
+            XX.XW2 <- t(x[, col.fit, drop=FALSE] * (weight * pi * (1-pi))^0.5)
+            XX.Fisher <- crossprod(t(XX.XW2))
+            XX.covs[col.fit, col.fit] <- fast.invFisher(XX.Fisher)   ###### HERE IS THE PROBLEM!!!
+        }
+        if(all(is.na(XX.covs)) == T) {
+            break
+        }  
+        delta <- as.vector(XX.covs %*% U.star)
+        delta[is.na(delta)] <- 0
+        mx <- max(abs(delta))/maxstep
+        if (mx > 1) 
+            delta <- delta/mx
+        evals <- evals + 1
+        if (maxit > 0) {
+            iter <- iter + 1
+            beta <- beta + delta
+                pi <- as.vector(1/(1 + exp(-x %*% beta - offset)))
+
+
+        }
+        if (iter == maxit | ((max(abs(delta)) <= xconv) & (all(abs(U.star[col.fit]) < 
+            gconv)))) 
+            break
+    }
+    # Error catching (if chol(x) not positive definite)
+    if(all(is.na(XX.covs))==T) {
+        var <- XX.covs
+        list(beta = NA, var = var, pi = NA, hat.diag = NA, 
+  iter = NA, evals = NA, conv = c(NA, 
+            NA, NA))
+    } else {
+        var <- XX.covs
+        list(beta = beta, var = var, pi = pi, hat.diag = h, 
+            iter = iter, evals = evals, conv = c(max(abs(U.star)),
+		 max(abs(delta))))
+    }
+}
+
+
+fast.logistf.control <- function (maxit = 50, maxhs = 15, maxstep = 15, lconv = 1e-05, 
+    gconv = 1e-05, xconv = 1e-05) 
+{
+    list(maxit = maxit, maxhs = maxhs, maxstep = maxstep, lconv = lconv, 
+        gconv = gconv, xconv = xconv)
+}
+
+fast.logDet <- function (x) {
+    my.chol <- tryCatch(chol(x),error=function(e) {NA})
+    if (all(is.na(my.chol))==T) {
+        return(NA)
+    } else {
+        return (2 * sum(log(diag(my.chol))))
+    }
+}   
+
+fast.invFisher <- function(x) {
+  my.chol <- tryCatch(chol(x),error=function(e) {NA})
+    if (all(is.na(my.chol))==T) {
+        return(NA)
+    } else {
+        return (chol2inv(my.chol))
+    }
+  #ifelse(is.na(my.chol), NA, chol2inv(my.chol))
+}
+
+
+ScoreTest_SPA <-function(genos,pheno,cov,obj.null,method=c("fastSPA","SPA"),minmac=5,Cutoff=2,alpha=5*10^-8,missing.id=NA,beta.out=FALSE,beta.Cutoff=5*10^-7)
+{
+	method<-match.arg(method)
+
+	if(missing(obj.null))
+	{
+		if(missing(cov) || is.null(cov))
+		{
+			cov<-rep(1,length(pheno))
+		}
+		obj.null<-ScoreTest_wSaddleApprox_NULL_Model(as.matrix(pheno) ~as.matrix(cov))
+	}
+	cov<-obj.null$cov
+	pheno<-obj.null$y
+
+	genos<-as.matrix(genos)
+	if(ncol(genos)==1)
+	{
+		m<-1
+		genos<-t(genos)
+	} else {
+		m <- nrow(genos)
+	}
+	if(is.na(missing.id)==FALSE)
+	{
+		genos[which(genos==missing.id)]<-NA
+	}
+	p.value<-rep(NA,m)
+	p.value.NA<-rep(NA,m)
+	Is.converge<-rep(NA,m)
+	beta<-rep(NA,m)
+	SEbeta<-rep(NA,m)
+	for (i in 1:m)
+	{
+		try({
+		ina<-which(is.na(genos[i,]))
+		if(length(ina)>0)
+		{
+			genos[i,ina]<-mean(genos[i,],na.rm=TRUE)
+		}
+		MAC<-min(sum(genos[i,]),sum(2-genos[i,]))
+		if(MAC>=minmac)
+		{
+			if(method=="fastSPA")
+			{
+				re <- TestSPAfast(as.vector(genos[i,,drop=FALSE]), obj.null, Cutoff=Cutoff, alpha=alpha)
+			} else {
+				re <- TestSPA(as.vector(genos[i,,drop=FALSE]), obj.null, Cutoff=Cutoff, alpha=alpha)
+			}
+			p.value[i] <- re$p.value
+			p.value.NA[i] <- re$p.value.NA
+			Is.converge[i]<- re$Is.converge
+			if(beta.out==TRUE && p.value[i]<beta.Cutoff)
+			{
+				re.firth<-fast.logistf.fit(x=cbind(t(genos[i,,drop=FALSE]),cov),y=pheno,firth=TRUE)
+				beta[i]<-re.firth$beta[1]
+				SEbeta[i]<-sqrt(re.firth$var[1,1])
+			}
+		}
+		})
+		if(i%%1000==0)	print(paste("Processed",i,"SNPs",sep=" "))
+	}
+	return(list(p.value=p.value,p.value.NA=p.value.NA,Is.converge=Is.converge,beta=beta,SEbeta=SEbeta))
+}
+
+##################################################################
+## MAIN FUNCTION:  multi.b.sna2
+##################################################################
+multi.b.sna2 <- function() {
+
+
+	beta.Cutoff=5*10^-6
+
+    n <- ncol(genos)
+    #k <- ncol(cov)
+	genos<-as.matrix(genos)
+	if(ncol(genos)==1)
+	{
+		m<-1
+		genos<-t(genos)
+	} else {
+		m <- nrow(genos)
+	}
+g<-ncol(phenos)
+
+    ## resolve missing genotype by mean imputation
+    ina <- is.na(genos)
+    if ( length(vids) > 0 ) {
+        genos[ina] <- matrix(AC[vids]/NS[vids],nrow(genos),ncol(genos))[ina]
+    }
+    
+    p <- matrix(NA,m,g) # store p-values for m markers
+    add <- matrix(NA,m,3*g) # extra columns:  p.value.NA, Beta, SE
+    cname <- outer(pnames,c("P.NA","BETA","SEBETA"),FUN="paste",sep=".") 
+	cname<-as.vector(t(cname))
+
+	for(gind in 1:g)
+	{
+    if ( m > 0 ) { ## If there is at least one marker to test
+	nm<-which(is.na(phenos[,gind])==FALSE)
+	pheno<-phenos[nm,gind]
+	geno<-as.matrix(genos[,nm])
+	if(ncol(geno)==1)	geno<-t(geno)
+	load(paste(nullf,".",pnames[gind],".null.RData",sep=""))
+	cov<-obj.null$cov
+
+        for (i in 1:m) {
+            re <- TestSPAfast(as.vector(geno[i,,drop=FALSE]), obj.null, Cutoff=2)
+            p[i,gind] <- re$p.value
+	beta<-NA
+	SEbeta<-NA
+	if(p[i,gind]<beta.Cutoff)
+		{
+			re.firth<-fast.logistf.fit(x=cbind(t(geno[i,,drop=FALSE]),cov),y=pheno,firth=TRUE)
+			beta<-re.firth$beta[1]
+			SEbeta<-sqrt(re.firth$var[1,1])
+		}      
+
+            add[i,(gind-1)*3+1:3] <- c(re$p.value.NA,beta,SEbeta)
+        }
+    }
+	}
+
+
+    return(list(p=p, add=add, cname=cname))
+}
+
+
