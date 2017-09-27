@@ -124,11 +124,12 @@ sub vcfSampleIndex {
 }
 
 sub readPedVcf {
-    my ($epactsdir,$ped,$vcf,$missing,$pheno,$rcovs,$rcondsnps,$field) = @_;
+    my ($epactsdir,$ped,$vcf,$missing,$pheno,$rcovs,$rcondsnps,$field,$pass) = @_;
     $rcovs = [] unless ( defined($rcovs) );
     $rcondsnps = [] unless ( defined($rcondsnps) );
     $missing = "NA" unless ( defined($missing) );
     $field = "GT" unless ( $field );
+    $pass = "" unless ( ( defined($pass) ) && $pass );
 
     my %hVcfIds = ();
     my @covs = @{$rcovs};
@@ -205,7 +206,7 @@ sub readPedVcf {
     ## Parse VCF and put condition SNP info
     my @vcfCondGenos = ();
     foreach my $condsnp (@condsnps) {
-	my @genos = &vcfExtractMarkerGenotypes($vcf,$condsnp,$field);
+	my @genos = &vcfExtractMarkerGenotypes($vcf,$condsnp,$field,$pass);
 	if ( $#genos < 0 ) {
 	    print STDERR "WARNING: Cannot find $condsnp from VCF file... Skipping..\n";
 	    next;
@@ -245,7 +246,7 @@ sub readPedVcf {
 	    my @c = ();
 	    for(my $j=0; $j < @icovs; ++$j) {
 		push(@c,&parsePheno($F[$icovs[$j]],$missing));
-		die "ERROR: Missing covariate value is detected. Currently EPACTS won't run correctly with missing covariates (bug fix TBA)\n" if ( $c[$#c] eq $missing );
+		#die "ERROR: Missing covariate value is detected. Currently EPACTS won't run correctly with missing covariates (bug fix TBA)\n" if ( $c[$#c] eq $missing );
 	    }
 	    my $ivcf = $hVcfIds{$id};
 	    for(my $j=0; $j < @vcfCondGenos; ++$j) {
@@ -520,14 +521,14 @@ sub readPedVcfMulti {
 	    my @p = ();
 	    for(my $j=0; $j < @iphes; ++$j) {
 		push(@p,&parsePheno($F[$iphes[$j]],$missing));
-		die "ERROR: Missing phenotype value is detected in individual $id, phenotype $rphes->[$j]. Currently EPACTS won't run with missing phenotypes\n" if ( $p[$#p] eq $missing );
+		#die "ERROR: Missing phenotype value is detected in individual $id, phenotype $rphes->[$j]. Currently EPACTS won't run with missing phenotypes\n" if ( $p[$#p] eq $missing );
 	    }
 	    $hPhes{$id} = \@p;
 	    
 	    my @c = ();
 	    for(my $j=0; $j < @icovs; ++$j) {
 		push(@c,&parsePheno($F[$icovs[$j]],$missing));
-		die "ERROR: Missing covariate value is detected in individual $id, covariate $rcovs->[$j]. Currently EPACTS won't run correctly with missing covariates\n" if ( $c[$#c] eq $missing );
+		#die "ERROR: Missing covariate value is detected in individual $id, covariate $rcovs->[$j]. Currently EPACTS won't run correctly with missing covariates\n" if ( $c[$#c] eq $missing );
 	    }
 	    my $ivcf = $hVcfIds{$id};
 	    for(my $j=0; $j < @vcfCondGenos; ++$j) {
@@ -543,9 +544,9 @@ sub readPedVcfMulti {
 }
 
 sub vcfExtractMarkerGenotypes {
-    my ($vcf,$markerId,$field) = @_;
+    my ($vcf,$markerId,$field,$pass) = @_;
     my @L = ();
-    open(IN,"$epactsdir/bin/vcfast convert --vcf $vcf --marker-id $markerId --field $field --out - | grep -v ^##|") || die "Cannot execute vcfast\n";
+    open(IN,"$epactsdir/bin/vcfast convert --vcf $vcf --marker-id $markerId --field $field ".($pass ? "" : "--ignoreFilter ")."--out - | grep -v ^##|") || die "Cannot execute vcfast\n";
     while(<IN>) {
 	#print $_;
 	my @F = split(/[\t\r\n]/);
@@ -634,7 +635,7 @@ sub initRef {
 	@szchrs = ();
 	@cumszchrsMb = (0);
 	my @sortedAutoChrs = sort {$a <=> $b} @autoChrs;
-	foreach my $c (@sortedAutoChrs) {
+	foreach my $c (@sortedAutoChrs,"X","Y") {
 	    push(@chrs, ($chrPrefix == 1) ? "chr$c" : $c);
 	    push(@szchrs, $hszchrs{$chrs[$#chrs]}->[3]);
 	    my $newcumszMb = $szchrs[$#szchrs]/1e6 + $cumszchrsMb[$#cumszchrsMb];

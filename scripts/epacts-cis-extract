@@ -14,7 +14,7 @@ my $win = 1000000;
 my $out = "";
 my $ucsc = "";
 my $maxp = 1e-3;
-my $ref = "";
+my $ref = $defaultfasta;
 
 ## distributions we're interested in
 my $maxGenes = 100000;

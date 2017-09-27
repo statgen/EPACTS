@@ -2,7 +2,7 @@
 args <- commandArgs(trailingOnly=TRUE)
 bindir <- args[2]  ## Directory containing the R scripts
 phenof <- args[3]  ## phenotype file
-##covf <- args[4]    ## covariate file
+covf <- args[4]    ## covariate file
 indf <- args[5]    ## individual IDs (in order from VCF)
 vcf <- args[6]     ## VCF file - must be bgzipped and tabixed
 region <- args[7]  ## Genomic region to load
@@ -28,6 +28,7 @@ dyn.load(paste(bindir,"/lib/epactsR/libs/epactsR",.Platform$dynlib.ext, sep=""))
 
 pnames <- scan(phenof,what=character(),nlines=1)[-1]
 phenos <- as.matrix(read.table(phenof)[,-1])
+cov <- as.matrix(read.table(covf)[,-1])
 
 ind <- as.integer(read.table(indf)[,2])-1
 
@@ -53,24 +54,31 @@ if ( m > 0 ) {
   }
   genos <- G[vids,,drop=FALSE]
 
-  print("foo")
+  #print("foo")
   source(paste(test,".R",sep="",collapse=NULL))
 
   func <- match.fun(test)
   r <- func()
 
   print("bar")
-  
-  out <- matrix(NA,m,4+2*ncol(phenos))
-  out[vids,3+(1:ncol(phenos))*2] <- r$p
-  out[vids,4+(1:ncol(phenos))*2] <- r$b
+
+  out <- matrix(NA,m,4+ncol(r$p)+ncol(r$add))
+  ##out <- matrix(NA,m,4+2*ncol(phenos))
+  out[vids,4+(1:ncol(r$p))] <- r$p
+  ##out[vids,3+(1:ncol(phenos))*2] <- r$p
+  out[vids,4+ncol(r$p)+(1:ncol(r$add))] <- r$add
+  ##out[vids,4+(1:ncol(phenos))*2] <- r$b
   out[,1] <- NS
   out[,2] <- AC
   out[,3] <- CR
   out[,4] <- MAF
-  colnames(out) <- c("NS","AC","CR","MAF",rep(NA,2*ncol(phenos)))
-  colnames(out)[3+(1:ncol(phenos))*2] <- paste(pnames,"P",sep=".")
-  colnames(out)[4+(1:ncol(phenos))*2] <- paste(pnames,"B",sep=".")
+  #colnames(out) <- c("NS","AC","CR","MAF",rep(NA,2*ncol(phenos)))
+  #colnames(out)[3+(1:ncol(phenos))*2] <- paste(pnames,"P",sep=".")
+  #colnames(out)[4+(1:ncol(phenos))*2] <- paste(pnames,"B",sep=".")
+  colnames(out) <- c("NS","AC","CR","MAF",rep(NA,ncol(r$p)),rep(NA,ncol(r$add)))
+  colnames(out)[4+(1:ncol(r$p))] <- paste(pnames,"P",sep=".")
+  colnames(out)[4+ncol(r$p)+(1:ncol(r$add))] <- r$cname
+
   rownames(out) <- rownames(G)
   print(warnings())
   .Call("writeMatrix",out,outf)

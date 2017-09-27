@@ -20,7 +20,7 @@ my $region = "";
 my $groupFlag = "";
 my $ignoreMAF = "";
 my $labelf = "";
-my $ref = "";
+my $ref = $defaultfasta;
 my %nchrs = ();
 
 wGetOptions(
@@ -305,7 +305,9 @@ if ( $chrom ) {
 else {
     my @xtics = ();
     for(my $j=0; $j < @chrs; ++$j) {
-	push(@xtics,"'$chrs[$j]' ".(($cumszchrsMb[$j]+$cumszchrsMb[$j+1])/2));
+	my $chrj = $chrs[$j];
+	$chrj =~ s/^chr//;
+	push(@xtics,"'$chrj' ".(($cumszchrsMb[$j]+$cumszchrsMb[$j+1])/2));
 	push(@xtics,"' ' ".($cumszchrsMb[$j]). " 1 ");
     }
     print CMD "set xtics (".join(",",@xtics).") nomirror out font 'GillSansMT,18'\n";

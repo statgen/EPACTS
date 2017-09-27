@@ -1222,6 +1222,131 @@ int runSimul(int argc, char** argv) {
   return 0;
 }
 
+/*
+int runGLST(int argc, char** argv) {
+  int orgArgc = argc;
+  char** orgArgv = argv;
+
+  pEmmaxArgs arg;
+  ParameterList pl;
+
+  BEGIN_LONG_PARAMETERS(longParameters)
+    LONG_PARAMETER_GROUP("VCF Input Options")
+    LONG_STRINGPARAMETER("vcf",&arg.vcf)
+    LONG_STRINGPARAMETER("region",&arg.region)
+    LONG_INTPARAMETER("unit",&arg.unit)
+    LONG_STRINGPARAMETER("indf",&arg.indf)
+    LONG_STRINGPARAMETER("field",&arg.field)
+    LONG_STRINGPARAMETER("rule",&arg.rule)
+    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
+    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+
+    LONG_PARAMETER_GROUP("Other Input Options")
+    LONG_STRINGPARAMETER("phenof",&arg.phenof)
+    LONG_STRINGPARAMETER("covf",&arg.covf)
+    LONG_STRINGPARAMETER("indf",&arg.indf)
+    LONG_PARAMETER("no-intercept",&arg.noIntercept)
+
+    LONG_PARAMETER_GROUP("Output Options")
+    LONG_STRINGPARAMETER("out",&arg.outf)
+    LONG_PARAMETER("verbose",&arg.verbose)
+  END_LONG_PARAMETERS();
+
+  pl.Add(new LongParameters("Available Options", longParameters));
+  pl.Read(argc,argv);
+  pl.Status();
+
+  // sanity check of input arguments
+  if ( arg.phenof.empty() || arg.vcf.empty() || arg.outf.empty()  ) {
+    error("--phenof, --vcf, --out are required parameters");
+  }
+
+  pEmmax emx;
+  emx.loadFiles(arg.phenof.c_str(), arg.covf.c_str(), arg.indf.c_str(), NULL, NULL, arg.vcf.c_str(), arg.region.c_str(), arg.rule.c_str(), arg.field.c_str(), !arg.ignoreFilter);
+
+  frequency_estimator freqest(&emx.X);
+
+  wFile wf(arg.outf.c_str());
+  int i, m;
+
+  for(int M=0; emx.tvcf.readMarkers(arg.unit); ) {
+    M += emx.tvcf.nMarkers;
+
+    fprintf(stderr,"Processing %d markers across %d individuals...",M, emx.tvcf.nInds);
+    for(i=0, m=0; i < emx.tvcf.nMarkers; ++i) {
+      // 
+      
+      af = emx.tvcf.alleleFreq(i);
+      maf = af > 0.5 ? 1-af : af;
+      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) && 
+	   ( emx.tvcf.MAF(i) <= arg.maxMAF ) && 
+	   ( emx.tvcf.MAC(i) <= arg.maxMAC ) && 
+	   ( emx.tvcf.MAC(i) >= arg.minMAC ) && 
+	   ( emx.tvcf.callRate(i) >= arg.minCallRate ) ) {
+	double lrt = emx.tvcf.LRT(i,g1,g2,af1,af2);
+	double pval = chisq1cdf(lrt);
+
+	// MARKER_ID NS MAF STAT PVALUE AF AF1 AF2
+	wf.printf("%s\t%d\t%d\t%s\t%d\t%.5lf\t%.4lf\t%.4lg\t%.5lf\t%.5lf\t%.5lf\n",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(),emx.tvcf.numAlleles[i]/2,maf,lrt,pval,af,af1,af2);
+	++m;
+      }
+      else {
+	wf.printf("%s\t%d\t%d\t%s\t%d\t%.5lf\tNA\tNA\t%.5lf\tNA\tNA\n",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(),emx.tvcf.numAlleles[i]/2,maf,af);
+      }
+    }
+    fprintf(stderr,"%d markers included\n",m);
+    
+
+  // fit the null model first
+
+  std::vector<int> g1, g2;
+
+  // Add additional parmameters : 
+  // --out-kinf, --out-eigR, --out-remlf, --out-assocf
+  std::string outKinf = arg.outf + ".kin";
+  std::string outEigf = arg.outf + ".eigR";
+  std::string outRemlf = arg.outf + ".reml";
+  std::string outAssocf = arg.outf + ".assoc";
+
+  char** newArgv = new char* [orgArgc + 100];
+  for(int i=0; i < orgArgc; ++i) newArgv[i] = orgArgv[i];
+
+  notice("---------------------------------------------------------");
+  notice("Running %s gen-kin command",orgArgv[0]);
+  notice("---------------------------------------------------------");
+  newArgv[orgArgc] = (char*)"--out-kinf"; 
+  newArgv[orgArgc+1] = (char*)outKinf.c_str();
+  runGenKin(orgArgc+1,newArgv+1);
+
+  notice("---------------------------------------------------------");
+  notice("Running %s reml command",orgArgv[0]);
+  notice("---------------------------------------------------------");
+  newArgv[orgArgc] = (char*)"--kinf"; 
+  newArgv[orgArgc+1] = (char*)outKinf.c_str();
+  newArgv[orgArgc+2] = (char*)"--out-eigf"; 
+  newArgv[orgArgc+3] = (char*)outEigf.c_str();
+  newArgv[orgArgc+4] = (char*)"--out-remlf"; 
+  newArgv[orgArgc+5] = (char*)outRemlf.c_str();
+  runReml(orgArgc+5,newArgv+1);
+
+  notice("---------------------------------------------------------");
+  notice("Running %s assoc command",orgArgv[0]);
+  notice("---------------------------------------------------------");
+  newArgv[orgArgc] = (char*)"--eigf"; 
+  newArgv[orgArgc+1] = (char*)outEigf.c_str();
+  newArgv[orgArgc+2] = (char*)"--remlf"; 
+  newArgv[orgArgc+3] = (char*)outRemlf.c_str();
+  newArgv[orgArgc+4] = (char*)"--out-assocf"; 
+  newArgv[orgArgc+5] = (char*)outAssocf.c_str();
+  runAssoc(orgArgc+5,newArgv+1);
+
+  delete [] newArgv;
+  return 0;
+}
+*/
+
 int runAll(int argc, char** argv) {
   int orgArgc = argc;
   char** orgArgv = argv;

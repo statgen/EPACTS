@@ -6,7 +6,7 @@ use File::Basename;
 use FindBin;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs parsePheno $binmake $binrm readPedVcf initRef intervalsByUnit intervalsByBED readBED);
+use epacts qw(@chrs @szchrs parsePheno $binmake $binrm readPedVcf initRef intervalsByUnit intervalsByBED readBED $defaultfasta);
 
 my $vcf = "";
 my $out = "";
@@ -20,7 +20,7 @@ my $pass = "";
 my $rule = "";
 my $sepchr = "";
 my $run = -1;
-my $ref = "";
+my $ref = $defaultfasta;
 my $restart = "";
 my $removeComplex = "";
 my $bedComplex = "";

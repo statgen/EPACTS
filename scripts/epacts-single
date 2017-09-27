@@ -36,7 +36,7 @@ my $mosixNodes = "";
 my $run = -1;
 my $noplot = "";
 my $restart = "";
-my $ref = "";
+my $ref = $defaultfasta;
 my $topzoom = 0;
 my @condsnps = ();
 my $callregion = "";
@@ -248,7 +248,7 @@ die "ERROR: Cannot open $vcf.tbi. The VCF file must be tabixed\n" unless ( -s "$
 
 #die "ERROR in installing R packages\n" if ( ! &installPackages() );
 
-my ($rVcfIds,$rhPhes,$rhCovs) = &readPedVcf($epactsdir,$ped,$vcf,$missing,$pheno,\@covs,\@condsnps,$field);
+my ($rVcfIds,$rhPhes,$rhCovs) = &readPedVcf($epactsdir,$ped,$vcf,$missing,$pheno,\@covs,\@condsnps,$field,$pass);
 my @vcfIds = @{$rVcfIds};
 my %hPhes = %{$rhPhes};
 my %hCovs = %{$rhCovs};
@@ -363,7 +363,7 @@ for(my $i=0; $i < @chrs; ++$i) {
 	    $cmd = "$epactsdir/bin/pEmmax GLRT --vcf $cvcf --phenof $pheno --indf $ind --region $region --out $op.epacts --field $field --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC ".($pass ? "" : "--ignoreFilter");
 	}
 	elsif ( $test eq "q.emmax" ) {
-	    $cmd = "$epactsdir/bin/pEmmax assoc --vcf $cvcf --region $region --phenof $pheno --field $field --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC";
+	    $cmd = "$epactsdir/bin/pEmmax assoc --vcf $cvcf --region $region --phenof $pheno --field $field --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC".($pass ? "" : "--ignoreFilter");
 	}
 	else {
 	    die "ERROR: Cannot find $datadir/single.$test.R\n" unless ( -s "$datadir/single.$test.R" );
@@ -393,7 +393,7 @@ print MAK "\t$epactsdir/bin/epacts-cat @tgts | $epactsdir/bin/bgzip -c > $out.ep
 print MAK "\t$epactsdir/bin/tabix -f -pbed $out.epacts.gz\n";
 print MAK "\t$binrm -f @tgts\n";
 unless ( $noplot ) {
-    print MAK "\t$epactsdir/bin/epacts-plot --in $out.epacts.gz".(($chr) ? " --region $chr:0" : "")."\n";
+    print MAK "\t$epactsdir/bin/epacts-plot --ref $ref --in $out.epacts.gz".(($chr) ? " --region $chr:0" : "")."\n";
 }
 if ( $topzoom > 0 ) {
     print MAK "\t$epactsdir/bin/epacts-zoom --vcf $vcf --prefix $out --top $topzoom ".($sepchr ? " --sepchr" : "")."\n";

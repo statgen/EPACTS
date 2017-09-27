@@ -456,12 +456,13 @@ muNA=mu[NAset],muNB=mu[-NAset],Cutoff=Cutoff,alpha=alpha)
 
 
 ##################################################################
-## MAIN FUNCTION:  single.b.sna2
+## MAIN FUNCTION:  multi.b.sna2
 ##################################################################
-single.b.sna2 <- function() {
+multi.b.sna2 <- function() {
 	#write.table(pheno,"y",row.names=F,col.names=F)
 	#write.table(genos,"genos",row.names=F,col.names=F)
 	#write.table(cov,"cov",row.names=F,col.names=F)
+phenos <- phenos - min(phenos,na.rm=T)
 
     n <- ncol(genos)
     k <- ncol(cov)
@@ -473,6 +474,7 @@ single.b.sna2 <- function() {
 	} else {
 		m <- nrow(genos)
 	}
+g<-ncol(phenos)
 
     ## resolve missing genotype by mean imputation
     ina <- is.na(genos)
@@ -480,21 +482,29 @@ single.b.sna2 <- function() {
         genos[ina] <- matrix(AC[vids]/NS[vids],nrow(genos),ncol(genos))[ina]
     }
     
-    p <- rep(NA,m) # store p-values for m markers
-    add <- matrix(NA,m,2) # extra columns:  Beta, SE, Chisq
-    cname <- c("PVAL.NA","CONVERGE") #,"N.CASE","N.CTRL","AF.CASE","AF.CTRL")
+    p <- matrix(NA,m,g) # store p-values for m markers
+    add <- matrix(NA,m,g) # extra columns:  Beta, SE, Chisq
+    cname <- paste(pnames,"P.NA",sep=".") #,"N.CASE","N.CTRL","AF.CASE","AF.CTRL")
 
+	for(gind in 1:g)
+	{
     if ( m > 0 ) { ## If there is at least one marker to test
-	obj.null<-ScoreTest_wSaddleApprox_NULL_Model(pheno ~as.matrix(cov))
+	nm<-which(is.na(phenos[,gind])==FALSE)
+	pheno<-phenos[nm,gind]
+	cov1<-cov[nm,]
+	geno<-as.matrix(genos[,nm])
+	if(ncol(geno)==1)	geno<-t(geno)
+
+	obj.null<-ScoreTest_wSaddleApprox_NULL_Model(pheno ~as.matrix(cov1))
         
         for (i in 1:m) {
-            re <- TestSPAfast(as.numeric(genos[i,,drop=FALSE]), obj.null, Cutoff=2)
-            p[i] <- re$p.value
+            re <- TestSPAfast(as.vector(geno[i,,drop=FALSE]), obj.null, Cutoff=2)
+            p[i,gind] <- re$p.value
             
-            add[i,1:2] <- c(re$p.value.NA, re$Is.converge)
+            add[i,gind] <- re$p.value.NA
         }
-
     }
+	}
 
 
     return(list(p=p, add=add, cname=cname))

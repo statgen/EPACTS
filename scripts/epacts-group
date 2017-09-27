@@ -6,7 +6,7 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs parsePheno readPedVcf $binR $binRscript $binrm $binmake installPackages forkExecWait getMosixCmd initRef);
+use epacts qw(@chrs @szchrs parsePheno readPedVcf $binR $binRscript $binrm $binmake installPackages forkExecWait getMosixCmd initRef $defaultfasta);
 
 my $vcf = "";
 my $pheno = "";
@@ -41,7 +41,7 @@ my $restart;
 my $binaryFlag = 0;
 my $vntFlag = 0;
 my @condsnps = ();
-my $ref = "";
+my $ref = $defaultfasta;
 
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
@@ -51,19 +51,19 @@ wGetOptions(
     "vcf=s",[\$vcf,
 	     "Input VCF file (tabixed and bgzipped)",
 	     "Input VCF file to calculate kinship matrix from. The VCF file must be tabixed and bgzipped"
-	     ],
+    ],
     "ped=s",[\$ped,
 	     "Input PED file for phenotypes and covariates",
 	     "PED format file containing a phenotypes (--pheno) and covariates (--cov). By default, 6th column in the PED file will be used as phenotypes, if no --pheno is specified"
-	     ],
+    ],
     "out=s",[\$out,
 	     "Prefix of output files",
 	     "Prefix of output files to store EPACTS groupwise association results",
-	     ],
+    ],
     "test=s",[\$test,
 	      "Name of groupwise test",
 	      "Name of groupwise association test to use. Below are built-in tests, and additional test may be plugged in. See B<EPACTS wiki> page for more detailed comparisons.\n B<b.collapse> : Binary trait collapsing (CMC) score test by Li and Leal\n B<b.madsen>   : Binary trait Madsen-Browning frequency-weighted test\n B<b.wcnt>     : Binary trait Frequency-weighted score test\n B<q.reverse>  : QT/Binary trait reverse logistic regression\n B<q.wilcox>   : QT/Binary trait reverse regression wilcoxon test\n B<skat>       : QT/Binary trait SKAT/SKAT-O by Wu et al & Lee et al\n B<emmaxCMC>   : QT/Binary trait EMMAX collapsing test\n B<emmaxVT>    : QT/Binary trait EMMAX Variable Threshold test"
-	      ],
+    ],
     "groupf=s",[\$groupf,
 		"EPACTS marker group file",
 		"EPACTS marker group file that defines the groups of markers to be tested for EPACTS groupwise association. See B<epacts make-group> for details on how to produce the marker group file",
@@ -72,31 +72,31 @@ wGetOptions(
     "pheno=s",[\$pheno,
 	       "Name of phenotype column from PED file",
 	       "Name of phenotype column from the PED file. The phenotype column name must match with either (1) the header of PED file, starting with #, or (2) the phenotype name provided by separate .dat file. If omitted, 6th column in the PED file will be used as phenotypes",
-	       ],
+    ],
     "cov=s",[\@covs,
 	     "Name of covariate column(s) from PED file",
 	     "Name of covariates from the PED file. Multiple use -cov options are allowed. By default, no covariate is assumed except for intercept",
-	     ],
+    ],
     "field=s",[\$field,
 	       "VCF's FORMAT field of genotypes or dosages",
 	       "VCF's FORMAT field entry to extract the genotype or dosage information. By default, 'GT' is used. If 'PL' or 'GL' field is specified, the genotype likelihoods will be converted into genotype dosages whenever needed",
-	       ],
+    ],
     "unit=i",[\$unit,
 	      "Number of groups for a parallel run",
 	      "The number of groups to run as a unit of parallelization. Default value is 500",
-	      ],
+    ],
     "scoref=s",[\$scoref,
 		"Functional score files to use",
 		"Genome-wide functional score file to use. The specific format of the score file is currently not documented, as this option is currently under development. Please contact the developer for the details",
-		],
+    ],
     "run=i",[\$run,
 	     "Run EPACTS immediately with specified # CPUs",
 	     "Automatically runs GNU make after creating the Makefile. If this is not set, the user must run GNU make separately for finishing the run",
-	     ],
+    ],
     "min-maf=f",[\$minMAF,
 		 "Minimum minor allele frequency (MAF) threshold",
 		 "Minimum minor allele frequency (MAF) threshold to include into groupwise association test. Default is 1e-6",
-		 ],
+    ],
     "min-mac=i",[\$minMAC,
 		 "Minimum minor allele count (MAC)",
 		 "Minimum minor allele acount (MAC) threshold to include into groupwise association test. Default is 1",
@@ -104,55 +104,56 @@ wGetOptions(
     "max-maf=f",[\$maxMAF,
 		 "Maximum MAF of determining 'rare' variants",
 		 "Maximum minor allele frequency (MAF) threshold to be considered as 'rare' variant. Default is 0.05",
-		 ],
+    ],
     "min-callrate=f",[\$minCallRate,
 		      "Minimum call rate per variant",
 		      "Minimum call rate, which is the proportion of non-missing genotypes, to run groupwise association test",
-		      ],
+    ],
     "min-rsq=f",[\$minRSQ,
 		 "Minimum RSQ_HAT value per variant",
 		 "Minimum RSQ_HAT value (as a surrogate of imputatio quality) threshold for including in the groupwise test",
-		],
+    ],
     "sepchr",[\$sepchr,
 	      "Indicator that VCFs are separated by chromosomes",
 	      "Indicator of separated VCF by chromosomes. The VCF file name must contain chr1, chr2, chr3,....",
-	      ],
+    ],
     "cond=s",[\@condsnps,
 	      "Perform conditional association analysis",
 	      "Perform conditional association analysis by specifying a marker ID in the format of [CHR]:[POS]_[REF]/[ALT] format. Multiple --cond options are possible.",
-	      ],
+    ],
     "--Additional Options",
     "missing=s",[\$missing,
 		 "String representing missing value",
 		 "String representing missing value. NA is by default",
-		 ],
+    ],
     "mosix-nodes=s",[\$mosixNodes,
 		     "Comma-separated list of MOSIX cluster nodes",
-		    ],
+    ],
     "no-plot",[\$noplot,
 	       "Skip producing the Manhattan and QQ plots",
 	       "Skip producing Manhanttan, QQ plots, and top association results",
-	      ],
+    ],
     "restart",[\$restart,
 	       "Ignore intermediate results and restart",
 	       "Ignore intermediate results and restart from scratch. Equivalent to running GNU make with -B option",
-	       ],
+    ],
     "inv-norm",[\$invNorm,
 		"Inverse-normal transformation of phenotypes",
 		"Perform inverse normal transformation (quantile normalization) of phenotypes before running association",
-	       ],
+    ],
     "--Options specific to EMMAX (q.emmax) test",
     "kinf=s",[\$kinf,
 	      "Kinship file produced by epacts make-kin",
 	      "Kinship file produced by B<epacts make-kin>"
-	      ],
+    ],
     "remlf=s",[\$remlf,
 	      "REML file produced by other run of q.emmax",
 	      "REML file produced by other run of EMMAX (either single SNP or groupwise associations)",
     ],
     "ref=s",[\$ref,
 	     "Reference FASTA file",
-	     "Reference FASTA file with index (.fai). Default is GRCh37 reference sequence (but you may need to run B<epacts download> first if you do not have local copy)",    
+	     "Reference FASTA file with index (.fai). Default is GRCh37 reference sequence (but you may need to run B<epacts download> first if you do not have local copy)"
+    ], 
     "--Options specific to SKAT (skat) test",
     "skat-o",[\$skatOptimal,
 	      "Run SKAT in optimal mode",
@@ -225,7 +226,7 @@ my ($betaA,$betaB) = split(/,/,$beta);
 die "ERROR: Cannot open $vcf\n" unless ( -s $vcf );
 die "ERROR: Cannot open $vcf.tbi. The VCF file must be tabixed\n" unless ( -s "$vcf.tbi" );
 
-my ($rVcfIds,$rhPhes,$rhCovs,$isBinary) = &readPedVcf($epactsdir,$ped,$vcf,$missing,$pheno,\@covs,\@condsnps,$field);
+my ($rVcfIds,$rhPhes,$rhCovs,$isBinary) = &readPedVcf($epactsdir,$ped,$vcf,$missing,$pheno,\@covs,\@condsnps,$field,0);
 my @vcfIds = @{$rVcfIds};
 my %hPhes = %{$rhPhes};
 my %hCovs = %{$rhCovs};
