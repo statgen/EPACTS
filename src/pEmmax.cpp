@@ -20,10 +20,49 @@
 
 using namespace Eigen;
 
-template <typename VecType>
-int runGenKin(const pEmmaxArgs& arg)
-{
-  pEmmax<VecType> emx;
+// Options for generating kinship matrix
+int runGenKin(int argc, char** argv) {
+  pEmmaxArgs arg;
+  ParameterList pl;
+
+  BEGIN_LONG_PARAMETERS(longParameters)
+    LONG_PARAMETER_GROUP("Input Options")
+    LONG_STRINGPARAMETER("vcf",&arg.vcf)
+    LONG_STRINGPARAMETER("indf",&arg.indf)
+    LONG_STRINGPARAMETER("region",&arg.region)
+    LONG_INTPARAMETER("unit",&arg.unit)
+    LONG_STRINGPARAMETER("field",&arg.field)
+    LONG_STRINGPARAMETER("rule",&arg.rule)
+    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+
+    LONG_PARAMETER_GROUP("Filtering Options")
+    LONG_STRINGPARAMETER("weight",&arg.weight)
+    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
+
+    LONG_PARAMETER_GROUP("Empircial Kinship Method")
+    EXCLUSIVE_PARAMETER("BN",&arg.BN)
+    EXCLUSIVE_PARAMETER("IBS",&arg.IBS)
+
+    LONG_PARAMETER_GROUP("Output Options")
+    LONG_STRINGPARAMETER("out-kinf",&arg.kinf)
+    LONG_PARAMETER("raw",&arg.raw)
+    LONG_PARAMETER("adj-diag",&arg.adjDiag)
+    LONG_PARAMETER("cov",&arg.cov)
+    LONG_PARAMETER("verbose",&arg.verbose)
+  END_LONG_PARAMETERS();
+
+  pl.Add(new LongParameters("Available Options", longParameters));
+  //int argstart = pl.ReadWithTrailer(argc, argv) + 1;
+  pl.Read(argc, argv);
+  pl.Status();
+
+  if ( arg.vcf.empty() || arg.kinf.empty() ) {
+    error("ERROR: --vcf and --out-kinf parameters are required");
+  }
+
+  pEmmax emx;
   emx.loadFiles(NULL, NULL, arg.indf.c_str(), NULL, NULL, arg.vcf.c_str(), arg.region.c_str(), arg.rule.c_str(), arg.field.c_str(), !arg.ignoreFilter);
 
   notice("nInds = %d : %s ...",emx.tvcf.nInds,emx.tvcf.inds[0].c_str());
@@ -117,59 +156,6 @@ int runGenKin(const pEmmaxArgs& arg)
   }
 
   return 0;
-}
-
-// Options for generating kinship matrix
-int runGenKin(int argc, char** argv) {
-  pEmmaxArgs arg;
-  ParameterList pl;
-
-  BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("Input Options")
-    LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("indf",&arg.indf)
-    LONG_STRINGPARAMETER("region",&arg.region)
-    LONG_INTPARAMETER("unit",&arg.unit)
-    LONG_STRINGPARAMETER("field",&arg.field)
-    LONG_STRINGPARAMETER("rule",&arg.rule)
-    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-
-    LONG_PARAMETER_GROUP("Filtering Options")
-    LONG_STRINGPARAMETER("weight",&arg.weight)
-    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
-
-    LONG_PARAMETER_GROUP("Empircial Kinship Method")
-    EXCLUSIVE_PARAMETER("BN",&arg.BN)
-    EXCLUSIVE_PARAMETER("IBS",&arg.IBS)
-
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out-kinf",&arg.kinf)
-    LONG_PARAMETER("raw",&arg.raw)
-    LONG_PARAMETER("adj-diag",&arg.adjDiag)
-    LONG_PARAMETER("cov",&arg.cov)
-    LONG_PARAMETER("verbose",&arg.verbose)
-  END_LONG_PARAMETERS();
-
-  pl.Add(new LongParameters("Available Options", longParameters));
-  //int argstart = pl.ReadWithTrailer(argc, argv) + 1;
-  pl.Read(argc, argv);
-  pl.Status();
-
-  if ( arg.vcf.empty() || arg.kinf.empty() ) {
-    error("ERROR: --vcf and --out-kinf parameters are required");
-  }
-
-  if (arg.field == "GT") return runGenKin<gt_vec>(arg);
-  else if (arg.field == "PL") return runGenKin<pl_vec>(arg);
-  else if (arg.field == "GL") return runGenKin<gl_vec>(arg);
-  else if (arg.field == "DS" || arg.field == "EC") return runGenKin<ds_vec>(arg);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
 }
 
 // ln(A+B+C) = ln(exp(lnA) + exp(lnB) + exp(lnC)) = lnA + ln(1 + exp(lnB-lnA) + exp(lnC-lnA));
@@ -333,7 +319,7 @@ int runReml(int argc, char** argv) {
     error("--phenof, --kinf, and --out-remlf are required parameters");
   }
 
-  pEmmax<gt_vec> emx;
+  pEmmax emx;
   emx.normalize = arg.normalize;
   emx.loadFiles(arg.phenof.c_str(), arg.covf.c_str(), arg.indf.c_str(), arg.kinf.c_str(), arg.ineigf.c_str(), NULL, NULL, NULL, NULL, true);
 
@@ -368,10 +354,49 @@ int runReml(int argc, char** argv) {
   return 0;
 }
 
-template <typename VecType>
-int runAssoc(const pEmmaxArgs& arg)
-{
-  pEmmax<VecType> emx;
+// y ~ X + Z + e
+// y(t) ~ Xt + Zt + et
+int runAssoc(int argc, char** argv) {
+  // Parse the input arguments
+  pEmmaxArgs arg;
+  ParameterList pl;
+
+  BEGIN_LONG_PARAMETERS(longParameters)
+    LONG_PARAMETER_GROUP("VCF Input Options")
+    LONG_STRINGPARAMETER("vcf",&arg.vcf)
+    LONG_STRINGPARAMETER("region",&arg.region)
+    LONG_INTPARAMETER("unit",&arg.unit)
+    LONG_STRINGPARAMETER("indf",&arg.indf)
+    LONG_STRINGPARAMETER("field",&arg.field)
+    LONG_STRINGPARAMETER("rule",&arg.rule)
+    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
+    LONG_INTPARAMETER("minMAC",&arg.minMAC)
+    LONG_INTPARAMETER("maxMAC",&arg.maxMAC)
+    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
+    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+
+    LONG_PARAMETER_GROUP("Other Input Options")
+    LONG_STRINGPARAMETER("phenof",&arg.phenof)
+    LONG_STRINGPARAMETER("eigf",&arg.ineigf)
+    LONG_STRINGPARAMETER("remlf",&arg.remlf)
+
+    LONG_PARAMETER_GROUP("Output Options")
+    LONG_STRINGPARAMETER("out-assocf",&arg.assocf)
+    LONG_PARAMETER("verbose",&arg.verbose)
+  END_LONG_PARAMETERS();
+
+  pl.Add(new LongParameters("Available Options", longParameters));
+  pl.Read(argc,argv);
+  pl.Status();
+
+  // sanity check of input arguments
+  if ( arg.phenof.empty() || arg.ineigf.empty() || arg.remlf.empty() ) {
+    error("--phenof, --out-remlf and --kinf are required parameters");
+  }
+
+  pEmmax emx;
   emx.normalize = arg.normalize;
   emx.loadFiles(arg.phenof.c_str(), arg.covf.c_str(), arg.indf.c_str(), NULL, arg.ineigf.c_str(), arg.vcf.c_str(), arg.region.c_str(), arg.rule.c_str(), arg.field.c_str(), !arg.ignoreFilter);
 
@@ -529,9 +554,9 @@ int runAssoc(const pEmmaxArgs& arg)
   return 0;
 }
 
-// y ~ X + Z + e
+
 // y(t) ~ Xt + Zt + et
-int runAssoc(int argc, char** argv) {
+int runBurdenAssoc(int argc, char** argv) {
   // Parse the input arguments
   pEmmaxArgs arg;
   ParameterList pl;
@@ -539,18 +564,17 @@ int runAssoc(int argc, char** argv) {
   BEGIN_LONG_PARAMETERS(longParameters)
     LONG_PARAMETER_GROUP("VCF Input Options")
     LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("region",&arg.region)
-    LONG_INTPARAMETER("unit",&arg.unit)
+    LONG_STRINGPARAMETER("groupf",&arg.groupf)
     LONG_STRINGPARAMETER("indf",&arg.indf)
     LONG_STRINGPARAMETER("field",&arg.field)
     LONG_STRINGPARAMETER("rule",&arg.rule)
     LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
     LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
     LONG_INTPARAMETER("minMAC",&arg.minMAC)
-    LONG_INTPARAMETER("maxMAC",&arg.maxMAC)
     LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
     LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
     LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+    LONG_PARAMETER("sepchr",&arg.sepchr)
 
     LONG_PARAMETER_GROUP("Other Input Options")
     LONG_STRINGPARAMETER("phenof",&arg.phenof)
@@ -567,25 +591,11 @@ int runAssoc(int argc, char** argv) {
   pl.Status();
 
   // sanity check of input arguments
-  if ( arg.phenof.empty() || arg.ineigf.empty() || arg.remlf.empty() ) {
-    error("--phenof, --out-remlf and --kinf are required parameters");
+  if ( arg.vcf.empty() || arg.phenof.empty() || arg.groupf.empty() || arg.ineigf.empty() || arg.remlf.empty() ) {
+    error("--vcf, --phenof, --groupf, --out-remlf and --kinf are required parameters");
   }
 
-  if (arg.field == "GT") return runAssoc<gt_vec>(arg);
-  else if (arg.field == "PL") return runAssoc<pl_vec>(arg);
-  else if (arg.field == "GL") return runAssoc<gl_vec>(arg);
-  else if (arg.field == "DS" || arg.field == "EC") return runAssoc<ds_vec>(arg);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
-}
-
-template <typename VecType>
-int runBurdenAssoc(const pEmmaxArgs& arg)
-{
-  pEmmax<VecType> emx;
+  pEmmax emx;
   emx.loadFiles( arg.phenof.c_str(), arg.covf.c_str(), arg.indf.c_str(), NULL, arg.ineigf.c_str(), arg.vcf.c_str(), NULL, NULL, arg.field.c_str(), !arg.ignoreFilter );
 
   pFile treml(arg.remlf.c_str());
@@ -721,10 +731,11 @@ int runBurdenAssoc(const pEmmaxArgs& arg)
     //notice("bar");
   }
   return 0;
+
 }
 
 // y(t) ~ Xt + Zt + et
-int runBurdenAssoc(int argc, char** argv) {
+int runEmmaxVT(int argc, char** argv) {
   // Parse the input arguments
   pEmmaxArgs arg;
   ParameterList pl;
@@ -748,6 +759,10 @@ int runBurdenAssoc(int argc, char** argv) {
     LONG_STRINGPARAMETER("phenof",&arg.phenof)
     LONG_STRINGPARAMETER("eigf",&arg.ineigf)
     LONG_STRINGPARAMETER("remlf",&arg.remlf)
+    LONG_STRINGPARAMETER("scoref",&arg.scoref)
+    LONG_INTPARAMETER("seed",&arg.seed)
+    LONG_INTPARAMETER("maxperm",&arg.maxperm)
+    LONG_INTPARAMETER("minperm",&arg.minperm)
 
     LONG_PARAMETER_GROUP("Output Options")
     LONG_STRINGPARAMETER("out-assocf",&arg.assocf)
@@ -763,22 +778,7 @@ int runBurdenAssoc(int argc, char** argv) {
     error("--vcf, --phenof, --groupf, --out-remlf and --kinf are required parameters");
   }
 
-  if (arg.field == "GT") return runBurdenAssoc<gt_vec>(arg);
-  else if (arg.field == "PL") return runBurdenAssoc<pl_vec>(arg);
-  else if (arg.field == "GL") return runBurdenAssoc<gl_vec>(arg);
-  else if (arg.field == "DS" || arg.field == "EC") return runBurdenAssoc<ds_vec>(arg);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
-
-}
-
-template <typename VecType>
-int runEmmaxVT(const pEmmaxArgs& arg)
-{
-  pEmmax<VecType> emx;
+  pEmmax emx;
   emx.loadFiles( arg.phenof.c_str(), arg.covf.c_str(), arg.indf.c_str(), NULL, arg.ineigf.c_str(), arg.vcf.c_str(), NULL, NULL, arg.field.c_str(), !arg.ignoreFilter );
 
   pFile treml(arg.remlf.c_str());
@@ -1035,38 +1035,40 @@ int runEmmaxVT(const pEmmaxArgs& arg)
   return 0;
 }
 
+double chisq1cdf(double x) {
+  if ( x < 0 ) x = 0;
+  return erfc(sqrt(x/2.));
+}
+
+// y ~ X + Z + e
 // y(t) ~ Xt + Zt + et
-int runEmmaxVT(int argc, char** argv) {
+int runGLRT(int argc, char** argv) {
   // Parse the input arguments
   pEmmaxArgs arg;
+  arg.field = "PL";
   ParameterList pl;
 
   BEGIN_LONG_PARAMETERS(longParameters)
     LONG_PARAMETER_GROUP("VCF Input Options")
     LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("groupf",&arg.groupf)
+    LONG_STRINGPARAMETER("region",&arg.region)
+    LONG_INTPARAMETER("unit",&arg.unit)
     LONG_STRINGPARAMETER("indf",&arg.indf)
     LONG_STRINGPARAMETER("field",&arg.field)
     LONG_STRINGPARAMETER("rule",&arg.rule)
     LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
     LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
     LONG_INTPARAMETER("minMAC",&arg.minMAC)
+    LONG_INTPARAMETER("maxMAC",&arg.maxMAC)
     LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
     LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-    LONG_PARAMETER("sepchr",&arg.sepchr)
 
     LONG_PARAMETER_GROUP("Other Input Options")
     LONG_STRINGPARAMETER("phenof",&arg.phenof)
-    LONG_STRINGPARAMETER("eigf",&arg.ineigf)
-    LONG_STRINGPARAMETER("remlf",&arg.remlf)
-    LONG_STRINGPARAMETER("scoref",&arg.scoref)
-    LONG_INTPARAMETER("seed",&arg.seed)
-    LONG_INTPARAMETER("maxperm",&arg.maxperm)
-    LONG_INTPARAMETER("minperm",&arg.minperm)
+    LONG_STRINGPARAMETER("indf",&arg.indf)
 
     LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out-assocf",&arg.assocf)
+    LONG_STRINGPARAMETER("out",&arg.outf)
     LONG_PARAMETER("verbose",&arg.verbose)
   END_LONG_PARAMETERS();
 
@@ -1075,30 +1077,11 @@ int runEmmaxVT(int argc, char** argv) {
   pl.Status();
 
   // sanity check of input arguments
-  if ( arg.vcf.empty() || arg.phenof.empty() || arg.groupf.empty() || arg.ineigf.empty() || arg.remlf.empty() ) {
-    error("--vcf, --phenof, --groupf, --out-remlf and --kinf are required parameters");
+  if ( arg.phenof.empty() || arg.vcf.empty() || arg.outf.empty() ) {
+    error("--phenof, --vcf -and --outf are required parameters");
   }
 
-  if (arg.field == "GT") return runEmmaxVT<gt_vec>(arg);
-  else if (arg.field == "PL") return runEmmaxVT<pl_vec>(arg);
-  else if (arg.field == "GL") return runEmmaxVT<gl_vec>(arg);
-  else if (arg.field == "DS" || arg.field == "EC") return runEmmaxVT<ds_vec>(arg);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
-}
-
-double chisq1cdf(double x) {
-  if ( x < 0 ) x = 0;
-  return erfc(sqrt(x/2.));
-}
-
-template <typename VecType>
-int runGLRT(const pEmmaxArgs& arg)
-{
-  pEmmax<VecType> emx;
+  pEmmax emx;
   emx.loadFiles(arg.phenof.c_str(), arg.covf.c_str(), arg.indf.c_str(), NULL, NULL, arg.vcf.c_str(), arg.region.c_str(), arg.rule.c_str(), arg.field.c_str(), !arg.ignoreFilter);
 
   wFile wf(arg.outf.c_str());
@@ -1149,58 +1132,6 @@ int runGLRT(const pEmmaxArgs& arg)
 
 // y ~ X + Z + e
 // y(t) ~ Xt + Zt + et
-int runGLRT(int argc, char** argv) {
-  // Parse the input arguments
-  pEmmaxArgs arg;
-  arg.field = "PL";
-  ParameterList pl;
-
-  BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("VCF Input Options")
-    LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("region",&arg.region)
-    LONG_INTPARAMETER("unit",&arg.unit)
-    LONG_STRINGPARAMETER("indf",&arg.indf)
-    LONG_STRINGPARAMETER("field",&arg.field)
-    LONG_STRINGPARAMETER("rule",&arg.rule)
-    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
-    LONG_INTPARAMETER("minMAC",&arg.minMAC)
-    LONG_INTPARAMETER("maxMAC",&arg.maxMAC)
-    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-
-    LONG_PARAMETER_GROUP("Other Input Options")
-    LONG_STRINGPARAMETER("phenof",&arg.phenof)
-    LONG_STRINGPARAMETER("indf",&arg.indf)
-
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out",&arg.outf)
-    LONG_PARAMETER("verbose",&arg.verbose)
-  END_LONG_PARAMETERS();
-
-  pl.Add(new LongParameters("Available Options", longParameters));
-  pl.Read(argc,argv);
-  pl.Status();
-
-  // sanity check of input arguments
-  if ( arg.phenof.empty() || arg.vcf.empty() || arg.outf.empty() ) {
-    error("--phenof, --vcf -and --outf are required parameters");
-  }
-
-  if (arg.field == "GT") return runGLRT<gt_vec>(arg);
-  else if (arg.field == "PL") return runGLRT<pl_vec>(arg);
-  else if (arg.field == "GL") return runGLRT<gl_vec>(arg);
-  else if (arg.field == "DS" || arg.field == "EC") return runGLRT<ds_vec>(arg);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
-}
-
-// y ~ X + Z + e
-// y(t) ~ Xt + Zt + et
 int runSimul(int argc, char** argv) {
   // Parse the input arguments
   pEmmaxArgs arg;
@@ -1228,7 +1159,7 @@ int runSimul(int argc, char** argv) {
     error("--out-phenof, --kinf or --vcf are required parameters");
   }
 
-  pEmmax<gt_vec> emx;
+  pEmmax emx;
   if ( arg.vcf.empty() ) {
     emx.loadFiles(NULL, NULL, arg.indf.c_str(), arg.kinf.c_str(), NULL, NULL, NULL, NULL, NULL, true);
   }
@@ -1457,9 +1388,55 @@ int runRemlAssoc(int argc, char** argv) {
   return 0;
 }
 
-template <typename VecType>
-int runVT(const pEmmaxArgs& arg, const std::string& vntf)
-{
+// variable threshold test
+int runVT(int argc, char** argv) {
+  // Parse the input arguments
+  pEmmaxArgs arg;
+  std::string vntf;
+  ParameterList pl;
+
+  BEGIN_LONG_PARAMETERS(longParameters)
+    LONG_PARAMETER_GROUP("VCF Input Options")
+    LONG_STRINGPARAMETER("vcf",&arg.vcf)
+    LONG_STRINGPARAMETER("groupf",&arg.groupf)
+    LONG_STRINGPARAMETER("field",&arg.field)
+    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
+    LONG_INTPARAMETER("minMAC",&arg.minMAC)
+    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
+    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+    LONG_PARAMETER("sepchr",&arg.sepchr)
+
+    LONG_PARAMETER_GROUP("Other Input Options")
+    LONG_STRINGPARAMETER("phenof",&arg.phenof)
+    LONG_STRINGPARAMETER("covf",&arg.covf)
+    LONG_STRINGPARAMETER("scoref",&arg.scoref)
+    LONG_INTPARAMETER("seed",&arg.seed)
+    LONG_INTPARAMETER("maxperm",&arg.maxperm)
+    LONG_INTPARAMETER("minperm",&arg.minperm)
+    LONG_PARAMETER("recessive",&arg.recessive)
+
+    LONG_PARAMETER_GROUP("Output Options")
+    LONG_STRINGPARAMETER("out-assocf",&arg.assocf)
+    LONG_STRINGPARAMETER("out-variantf",&vntf)
+    LONG_PARAMETER("verbose",&arg.verbose)
+  END_LONG_PARAMETERS();
+
+  pl.Add(new LongParameters("Available Options", longParameters));
+  pl.Read(argc,argv);
+  pl.Status();
+
+  // sanity check of input arguments
+  if ( arg.vcf.empty() || arg.phenof.empty() || arg.groupf.empty() || arg.assocf.empty() || vntf.empty() ) {
+    error("--vcf, --phenof, --groupf, --out-assocf, --out-variantf are required parameters");
+  }
+
+  if ( arg.seed == 0 ) {
+    arg.seed = (unsigned int)std::time(NULL);
+  }
+  srand(arg.seed);
+
   // p : # permutation
   // m : # of markers (or distinct allele count)
   // maximum number of repetition is p * m
@@ -1470,7 +1447,7 @@ int runVT(const pEmmaxArgs& arg, const std::string& vntf)
   // identify overlapping markers between phe, indf
   // assuming covf will be matching perfectly (can be verified by --in-eig)
 
-  pEmmax<VecType> emx;
+  pEmmax emx;
   emx.loadFiles(arg.phenof.c_str(), arg.covf.c_str(), arg.indf.c_str(), NULL, NULL, arg.vcf.c_str(), arg.region.c_str(), NULL, arg.field.c_str(), !arg.ignoreFilter);
 
   // regress out the covariates
@@ -1724,17 +1701,18 @@ int runVT(const pEmmaxArgs& arg, const std::string& vntf)
 }
 
 // variable threshold test
-int runVT(int argc, char** argv) {
+int runDump(int argc, char** argv) {
   // Parse the input arguments
   pEmmaxArgs arg;
-  std::string vntf;
   ParameterList pl;
 
   BEGIN_LONG_PARAMETERS(longParameters)
     LONG_PARAMETER_GROUP("VCF Input Options")
     LONG_STRINGPARAMETER("vcf",&arg.vcf)
+    LONG_STRINGPARAMETER("markerset",&arg.markerset)
     LONG_STRINGPARAMETER("groupf",&arg.groupf)
     LONG_STRINGPARAMETER("field",&arg.field)
+    LONG_STRINGPARAMETER("rule",&arg.rule)
     LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
     LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
     LONG_INTPARAMETER("minMAC",&arg.minMAC)
@@ -1747,15 +1725,12 @@ int runVT(int argc, char** argv) {
     LONG_STRINGPARAMETER("phenof",&arg.phenof)
     LONG_STRINGPARAMETER("covf",&arg.covf)
     LONG_STRINGPARAMETER("scoref",&arg.scoref)
-    LONG_INTPARAMETER("seed",&arg.seed)
-    LONG_INTPARAMETER("maxperm",&arg.maxperm)
-    LONG_INTPARAMETER("minperm",&arg.minperm)
-    LONG_PARAMETER("recessive",&arg.recessive)
 
     LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out-assocf",&arg.assocf)
-    LONG_STRINGPARAMETER("out-variantf",&vntf)
+    LONG_STRINGPARAMETER("outf",&arg.outf)
     LONG_PARAMETER("verbose",&arg.verbose)
+    LONG_PARAMETER("summary",&arg.summarize)
+    LONG_INTPARAMETER("bins",&arg.bins)
   END_LONG_PARAMETERS();
 
   pl.Add(new LongParameters("Available Options", longParameters));
@@ -1763,30 +1738,11 @@ int runVT(int argc, char** argv) {
   pl.Status();
 
   // sanity check of input arguments
-  if ( arg.vcf.empty() || arg.phenof.empty() || arg.groupf.empty() || arg.assocf.empty() || vntf.empty() ) {
-    error("--vcf, --phenof, --groupf, --out-assocf, --out-variantf are required parameters");
+  if ( arg.vcf.empty() || arg.phenof.empty() || arg.markerset.empty() || arg.outf.empty() ) {
+    error("--vcf, --phenof, --markerset, --outf are required parameters");
   }
 
-  if ( arg.seed == 0 ) {
-    arg.seed = (unsigned int)std::time(NULL);
-  }
-  srand(arg.seed);
-
-  if (arg.field == "GT") return runVT<gt_vec>(arg, vntf);
-  else if (arg.field == "PL") return runVT<pl_vec>(arg, vntf);
-  else if (arg.field == "GL") return runVT<gl_vec>(arg, vntf);
-  else if (arg.field == "DS" || arg.field == "EC") return runVT<ds_vec>(arg, vntf);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
-}
-
-template <typename VecType>
-int runDump(const pEmmaxArgs& arg)
-{
-  pEmmax<VecType> emx;
+  pEmmax emx;
   emx.loadFiles(arg.phenof.c_str(), arg.covf.c_str(), arg.indf.c_str(), NULL, NULL, arg.vcf.c_str(), arg.region.c_str(), NULL, arg.field.c_str(), !arg.ignoreFilter);
 
   // categorize phenotypes into categories
@@ -2010,90 +1966,6 @@ int runDump(const pEmmaxArgs& arg)
 }
 
 // variable threshold test
-int runDump(int argc, char** argv) {
-  // Parse the input arguments
-  pEmmaxArgs arg;
-  ParameterList pl;
-
-  BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("VCF Input Options")
-    LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("markerset",&arg.markerset)
-    LONG_STRINGPARAMETER("groupf",&arg.groupf)
-    LONG_STRINGPARAMETER("field",&arg.field)
-    LONG_STRINGPARAMETER("rule",&arg.rule)
-    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
-    LONG_INTPARAMETER("minMAC",&arg.minMAC)
-    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
-    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-    LONG_PARAMETER("sepchr",&arg.sepchr)
-
-    LONG_PARAMETER_GROUP("Other Input Options")
-    LONG_STRINGPARAMETER("phenof",&arg.phenof)
-    LONG_STRINGPARAMETER("covf",&arg.covf)
-    LONG_STRINGPARAMETER("scoref",&arg.scoref)
-
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("outf",&arg.outf)
-    LONG_PARAMETER("verbose",&arg.verbose)
-    LONG_PARAMETER("summary",&arg.summarize)
-    LONG_INTPARAMETER("bins",&arg.bins)
-  END_LONG_PARAMETERS();
-
-  pl.Add(new LongParameters("Available Options", longParameters));
-  pl.Read(argc,argv);
-  pl.Status();
-
-  // sanity check of input arguments
-  if ( arg.vcf.empty() || arg.phenof.empty() || arg.markerset.empty() || arg.outf.empty() ) {
-    error("--vcf, --phenof, --markerset, --outf are required parameters");
-  }
-
-  if (arg.field == "GT") return runDump<gt_vec>(arg);
-  else if (arg.field == "PL") return runDump<pl_vec>(arg);
-  else if (arg.field == "GL") return runDump<gl_vec>(arg);
-  else if (arg.field == "DS" || arg.field == "EC") return runDump<ds_vec>(arg);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
-}
-
-template <typename VecType>
-int runVcfInfo(const pEmmaxArgs& arg)
-{
-  pEmmax<VecType> emx;
-  emx.loadFiles(NULL, NULL, arg.indf.c_str(), NULL, NULL, arg.vcf.c_str(), arg.region.c_str(), NULL, arg.field.c_str(), !arg.ignoreFilter);
-
-  wFile wf(arg.outf.c_str());
-  wf.printf("#CHROM\tBEG\tEND\tMARKER_ID\tNS\tAF\tAC\tCALLRATE\tRSQ\tSCORE\n");
-
-  genomeScore gScore;
-  if ( !arg.scoref.empty() ) {
-    gScore.setDir(arg.scoref.c_str());
-  }
-
-  for(int M=0; emx.tvcf.readMarkers(arg.unit); ) {
-    M += emx.tvcf.nMarkers;
-    fprintf(stderr,"Processing %d markers across %d individuals...",M, emx.tvcf.nInds);
-    for(int i=0; i < emx.tvcf.nMarkers; ++i) {
-      wf.printf("%s\t%d\t%d\t%s\t%d\t%.5lf\t%.2lf\t%.5lf\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(),emx.tvcf.numAlleles[i]/2,emx.tvcf.alleleFreq(i),emx.tvcf.sumAlleles[i],emx.tvcf.callRate(i),emx.tvcf.RSQ(i));
-      if ( arg.scoref.empty() ) {
-        wf.printf("\tNA\n");
-      }
-      else {
-        wf.printf("\t%.4lf\n",gScore.baseScore(emx.tvcf.markers[i].c_str()));
-      }
-    }
-  }
-  wf.close();
-  return 0;
-}
-
-// variable threshold test
 int runVcfInfo(int argc, char** argv) {
   // Parse the input arguments
   pEmmaxArgs arg;
@@ -2126,15 +1998,32 @@ int runVcfInfo(int argc, char** argv) {
     error("--vcf, --outf are required parameters");
   }
 
-  if (arg.field == "GT") return runVcfInfo<gt_vec>(arg);
-  else if (arg.field == "PL") return runVcfInfo<pl_vec>(arg);
-  else if (arg.field == "GL") return runVcfInfo<gl_vec>(arg);
-  else if (arg.field == "DS" || arg.field == "EC") return runVcfInfo<ds_vec>(arg);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
+  pEmmax emx;
+  emx.loadFiles(NULL, NULL, arg.indf.c_str(), NULL, NULL, arg.vcf.c_str(), arg.region.c_str(), NULL, arg.field.c_str(), !arg.ignoreFilter);
+
+  wFile wf(arg.outf.c_str());
+  wf.printf("#CHROM\tBEG\tEND\tMARKER_ID\tNS\tAF\tAC\tCALLRATE\tRSQ\tSCORE\n");
+
+  genomeScore gScore;
+  if ( !arg.scoref.empty() ) {
+    gScore.setDir(arg.scoref.c_str());
   }
+
+  for(int M=0; emx.tvcf.readMarkers(arg.unit); ) {
+    M += emx.tvcf.nMarkers;
+    fprintf(stderr,"Processing %d markers across %d individuals...",M, emx.tvcf.nInds);
+    for(int i=0; i < emx.tvcf.nMarkers; ++i) {
+      wf.printf("%s\t%d\t%d\t%s\t%d\t%.5lf\t%.2lf\t%.5lf\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(),emx.tvcf.numAlleles[i]/2,emx.tvcf.alleleFreq(i),emx.tvcf.sumAlleles[i],emx.tvcf.callRate(i),emx.tvcf.RSQ(i));
+      if ( arg.scoref.empty() ) {
+        wf.printf("\tNA\n");
+      }
+      else {
+        wf.printf("\t%.4lf\n",gScore.baseScore(emx.tvcf.markers[i].c_str()));
+      }
+    }
+  }
+  wf.close();
+  return 0;
 }
 
 int runKinUtil(int argc, char** argv) {
@@ -2306,10 +2195,49 @@ int runKinUtil(int argc, char** argv) {
   return 0;
 }
 
-template <typename VecType>
-int runMultiAssoc(const pEmmaxArgs& arg)
-{
-  pEmmaxMulti<VecType> emx;
+int runMultiAssoc(int argc, char** argv) {
+  // Parse the input arguments
+  pEmmaxArgs arg;
+  ParameterList pl;
+
+  BEGIN_LONG_PARAMETERS(longParameters)
+    LONG_PARAMETER_GROUP("VCF Input Options")
+    LONG_STRINGPARAMETER("vcf",&arg.vcf)
+    LONG_STRINGPARAMETER("region",&arg.region)
+    LONG_INTPARAMETER("unit",&arg.unit)
+    LONG_STRINGPARAMETER("indf",&arg.indf)
+    LONG_STRINGPARAMETER("field",&arg.field)
+    LONG_STRINGPARAMETER("rule",&arg.rule)
+    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
+    LONG_INTPARAMETER("minMAC",&arg.minMAC)
+    LONG_INTPARAMETER("maxMAC",&arg.maxMAC)
+    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
+    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+
+    LONG_PARAMETER_GROUP("Other Input Options")
+    LONG_STRINGPARAMETER("tryf",&arg.tryf)
+    LONG_STRINGPARAMETER("eigf",&arg.ineigf)
+    LONG_STRINGPARAMETER("remlf",&arg.remlf)
+
+    LONG_PARAMETER_GROUP("Output Options")
+    LONG_PARAMETER("compact",&arg.compact)
+    LONG_DOUBLEPARAMETER("maxP",&arg.maxP)
+    LONG_STRINGPARAMETER("out-assocf",&arg.assocf)
+    LONG_PARAMETER("verbose",&arg.verbose)
+  END_LONG_PARAMETERS();
+
+  pl.Add(new LongParameters("Available Options", longParameters));
+  pl.Read(argc,argv);
+  pl.Status();
+
+  // sanity check of input arguments
+  if ( arg.tryf.empty() || arg.ineigf.empty() || arg.remlf.empty() ) {
+    error("--tryf, --remlf and --kinf are required parameters");
+  }
+
+  pEmmaxMulti emx;
   emx.normalize = arg.normalize;
   emx.loadFiles(arg.tryf.c_str(), NULL, arg.indf.c_str(), NULL, arg.ineigf.c_str(), arg.vcf.c_str(), arg.region.c_str(), arg.rule.c_str(), arg.field.c_str(), !arg.ignoreFilter);
 
@@ -2436,59 +2364,6 @@ int runMultiAssoc(const pEmmaxArgs& arg)
   return 0;
 }
 
-int runMultiAssoc(int argc, char** argv) {
-  // Parse the input arguments
-  pEmmaxArgs arg;
-  ParameterList pl;
-
-  BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("VCF Input Options")
-    LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("region",&arg.region)
-    LONG_INTPARAMETER("unit",&arg.unit)
-    LONG_STRINGPARAMETER("indf",&arg.indf)
-    LONG_STRINGPARAMETER("field",&arg.field)
-    LONG_STRINGPARAMETER("rule",&arg.rule)
-    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
-    LONG_INTPARAMETER("minMAC",&arg.minMAC)
-    LONG_INTPARAMETER("maxMAC",&arg.maxMAC)
-    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
-    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-
-    LONG_PARAMETER_GROUP("Other Input Options")
-    LONG_STRINGPARAMETER("tryf",&arg.tryf)
-    LONG_STRINGPARAMETER("eigf",&arg.ineigf)
-    LONG_STRINGPARAMETER("remlf",&arg.remlf)
-
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_PARAMETER("compact",&arg.compact)
-    LONG_DOUBLEPARAMETER("maxP",&arg.maxP)
-    LONG_STRINGPARAMETER("out-assocf",&arg.assocf)
-    LONG_PARAMETER("verbose",&arg.verbose)
-  END_LONG_PARAMETERS();
-
-  pl.Add(new LongParameters("Available Options", longParameters));
-  pl.Read(argc,argv);
-  pl.Status();
-
-  // sanity check of input arguments
-  if ( arg.tryf.empty() || arg.ineigf.empty() || arg.remlf.empty() ) {
-    error("--tryf, --remlf and --kinf are required parameters");
-  }
-
-  if (arg.field == "GT") return runMultiAssoc<gt_vec>(arg);
-  else if (arg.field == "PL") return runMultiAssoc<pl_vec>(arg);
-  else if (arg.field == "GL") return runMultiAssoc<gl_vec>(arg);
-  else if (arg.field == "DS" || arg.field == "EC") return runMultiAssoc<ds_vec>(arg);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
-}
-
 // Perform REML fitting
 int runMultiReml(int argc, char** argv) {
   // Parse the input arguments
@@ -2522,7 +2397,7 @@ int runMultiReml(int argc, char** argv) {
     error("--phenof, --kinf, and --out-remlf are required parameters");
   }
 
-  pEmmaxMulti<gt_vec> emx;
+  pEmmaxMulti emx;
   emx.normalize = arg.normalize;
 
   // load a set of phenotypes, covariates, and kinship, (and eigendecomposition)
@@ -2587,10 +2462,47 @@ int runMultiReml(int argc, char** argv) {
   return 0;
 }
 
-template <typename VecType>
-int runMultiAssocPlain(const pEmmaxArgs& arg)
-{
-  pEmmaxMulti<VecType> emx;
+int runMultiAssocPlain(int argc, char** argv) {
+  // Parse the input arguments
+  pEmmaxArgs arg;
+  ParameterList pl;
+
+  BEGIN_LONG_PARAMETERS(longParameters)
+    LONG_PARAMETER_GROUP("VCF Input Options")
+    LONG_STRINGPARAMETER("vcf",&arg.vcf)
+    LONG_STRINGPARAMETER("region",&arg.region)
+    LONG_INTPARAMETER("unit",&arg.unit)
+    LONG_STRINGPARAMETER("indf",&arg.indf)
+    LONG_STRINGPARAMETER("field",&arg.field)
+    LONG_STRINGPARAMETER("rule",&arg.rule)
+    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
+    LONG_INTPARAMETER("minMAC",&arg.minMAC)
+    LONG_INTPARAMETER("maxMAC",&arg.maxMAC)
+    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
+    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+
+    LONG_PARAMETER_GROUP("Other Input Options")
+    LONG_STRINGPARAMETER("pheno",&arg.phenof)
+
+    LONG_PARAMETER_GROUP("Output Options")
+    LONG_PARAMETER("compact",&arg.compact)
+    LONG_DOUBLEPARAMETER("maxP",&arg.maxP)
+    LONG_STRINGPARAMETER("out-assocf",&arg.assocf)
+    LONG_PARAMETER("verbose",&arg.verbose)
+  END_LONG_PARAMETERS();
+
+  pl.Add(new LongParameters("Available Options", longParameters));
+  pl.Read(argc,argv);
+  pl.Status();
+
+  // sanity check of input arguments
+  if ( arg.phenof.empty() && arg.vcf.empty() ) {
+    error("--pheno, --vcf are required parameters");
+  }
+
+  pEmmaxMulti emx;
   emx.normalize = arg.normalize;
   emx.loadFiles(arg.phenof.c_str(), NULL, arg.indf.c_str(), NULL, NULL, arg.vcf.c_str(), arg.region.c_str(), arg.rule.c_str(), arg.field.c_str(), !arg.ignoreFilter);
 
@@ -2702,57 +2614,6 @@ int runMultiAssocPlain(const pEmmaxArgs& arg)
 
   }
   return 0;
-}
-
-int runMultiAssocPlain(int argc, char** argv) {
-  // Parse the input arguments
-  pEmmaxArgs arg;
-  ParameterList pl;
-
-  BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("VCF Input Options")
-    LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("region",&arg.region)
-    LONG_INTPARAMETER("unit",&arg.unit)
-    LONG_STRINGPARAMETER("indf",&arg.indf)
-    LONG_STRINGPARAMETER("field",&arg.field)
-    LONG_STRINGPARAMETER("rule",&arg.rule)
-    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
-    LONG_INTPARAMETER("minMAC",&arg.minMAC)
-    LONG_INTPARAMETER("maxMAC",&arg.maxMAC)
-    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_DOUBLEPARAMETER("minRSQ",&arg.minRSQ)
-    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-
-    LONG_PARAMETER_GROUP("Other Input Options")
-    LONG_STRINGPARAMETER("pheno",&arg.phenof)
-
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_PARAMETER("compact",&arg.compact)
-    LONG_DOUBLEPARAMETER("maxP",&arg.maxP)
-    LONG_STRINGPARAMETER("out-assocf",&arg.assocf)
-    LONG_PARAMETER("verbose",&arg.verbose)
-  END_LONG_PARAMETERS();
-
-  pl.Add(new LongParameters("Available Options", longParameters));
-  pl.Read(argc,argv);
-  pl.Status();
-
-  // sanity check of input arguments
-  if ( arg.phenof.empty() && arg.vcf.empty() ) {
-    error("--pheno, --vcf are required parameters");
-  }
-
-  if (arg.field == "GT") return runMultiAssocPlain<gt_vec>(arg);
-  else if (arg.field == "PL") return runMultiAssocPlain<pl_vec>(arg);
-  else if (arg.field == "GL") return runMultiAssocPlain<gl_vec>(arg);
-  else if (arg.field == "DS" || arg.field == "EC") return runMultiAssocPlain<ds_vec>(arg);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
 }
 
 

@@ -21,15 +21,9 @@
 #include "boolParser.h"
 #include "PhredHelper.h"
 
-typedef savvy::dense_genotype_vector<float>                   gt_vec;
-typedef savvy::dense_dosage_vector<float>                     ds_vec;
-typedef savvy::dense_genotype_likelihoods_vector<float>       gl_vec;
-typedef savvy::dense_phred_genotype_likelihoods_vector<float> pl_vec;
-
-template<typename VecType>
 class fVcf {
 private:
-  savvy::indexed_reader reader_;
+  savvy::indexed_reader<1> reader_;
 
   static savvy::region string_to_region(const std::string& region_string)
   {
@@ -170,7 +164,12 @@ public:
     passOnly = pass;
     hardGenotype = ( key == "GT" ? true : false);
 
-    reader_ = savvy::indexed_reader(vcf, region);
+    savvy::fmt data_format = savvy::fmt::genotype;
+    if (key == "PL") data_format = savvy::fmt::phred_scaled_genotype_likelihood;
+    else if (key == "GL") data_format = savvy::fmt::genotype_likelihood;
+    else if (key == "DS" || key == "EC") data_format = savvy::fmt::dosage;
+
+    reader_ = savvy::indexed_reader<1>(vcf, region, data_format);
 
     if ( key == "GL" ) {
       glFlag = true;
@@ -401,30 +400,30 @@ public:
     }
   }
 
-  int parseMarkers(VecType var, int startIdx = 9) {
+  int parseMarkers(const savvy::site_info& anno, const std::vector<float>& temp_genos, int startIdx = 9) {
     //notice("fVcf::parseMarkers() called");
     //, std::vector<std::string>& m, std::vector<float>& v, int startIdx = 9, const char* key = "GT", const char** infoSubstrs = NULL, int nSubstr = 0) {
     char* p;
     char* n;
 
-    std::string chrom = var.chromosome();
-    std::string pos = std::to_string(var.locus());
-    std::string ref = var.ref();
-    std::string alt = var.alt();
-    std::string markerId = var.prop("ID");
+    std::string chrom = anno.chromosome();
+    std::string pos = std::to_string(anno.locus());
+    std::string ref = anno.ref();
+    std::string alt = anno.alt();
+    std::string markerId = anno.prop("ID");
     std::string markerKey = chrom+":"+pos+"_"+ref+"/"+alt;
     if ( markerSet.find(markerKey) == markerSet.end() ) {
       return -1;
     }
-    if ( ( passOnly ) && ( var.prop("FILTER") != "PASS" ) ) return -1;
+    if ( ( passOnly ) && ( anno.prop("FILTER") != "PASS" ) ) return -1;
 
     std::string s;
     int keyIdx = 0;
     int i, j, k, l;
     int lKey = (int)key.size();
 
-    int AN = atoi(var.prop("AN").c_str()) + 3;
-    float AC = atoi(var.prop("AC").c_str()) + 3;
+    int AN = atoi(anno.prop("AN").c_str()) + 3;
+    float AC = atoi(anno.prop("AC").c_str()) + 3;
     float sqAC = 0.0;
     if (AN == 0) {
       error("AN is not observed in INFO field in site only VCF");
@@ -436,7 +435,7 @@ public:
 
 
 
-    j = var.size();
+    j = temp_genos.size();
     if ( (nInds == 0) && icols.empty() && ((int)genos.size() == j) ) nInds = j;
 
     if ( nInds != j ) {
@@ -444,10 +443,10 @@ public:
       abort();
     }
 
-    loadGenos(var);
+    loadGenos(temp_genos);
 
     // if GL or PL flag is set, automatically put dosage as quantitative genotypes
-    if (std::is_same<VecType, gl_vec>::value || std::is_same<VecType, pl_vec>::value) {
+    if (key == "GL" || key == "PL") {
       //notice("fVcf::parseMarkers() - glFlag is on");
 
       // set allele frequency
@@ -1025,7 +1024,8 @@ public:
   int readMarkerGroup(std::vector<std::string>& markerIDs,
                       int startIndex = 0, bool sepchr = false)
   {
-    VecType var;
+    savvy::site_info anno;
+    std::vector<float> temp_genos;
 
     std::string curChrom;
     int beg = 1000000000, end = 0;
@@ -1063,9 +1063,9 @@ public:
 
       markerSet.clear();
       markerSet.insert(markerIDs[i]);
-      while (glFlag ?  reader_ >> reinterpret_cast<savvy::dense_dosage_vector<float>&>(var) :  reader_ >> reinterpret_cast<savvy::dense_genotype_vector<float>&>(var)) {
+      while (reader_.read(anno, temp_genos)) {
         //nc = tf.getLength();
-        int cols2 = parseMarkers(var);
+        int cols2 = parseMarkers(anno, temp_genos);
         if ( cols2 >= 0 ) {
           if ( nInds != cols2 ) {
             error("fVcf::readMarkers() : Column size does not match : %d vs %d at marker %s", nInds, cols2, markers[markers.size()-1].c_str() );
@@ -1096,7 +1096,8 @@ public:
 
   // read markers until reach the end of file
   int readMarkers(int m = 0, bool del = true) {
-    VecType var;
+    savvy::site_info anno;
+    std::vector<float> temp_genos;
 
     if ( del ) clear();
 
@@ -1106,8 +1107,8 @@ public:
 
     //fprintf(stderr,"fVcf::readMarkers(%d) called",m);
 
-    while (reader_ >> var) {
-      int cols2 = parseMarkers(var);
+    while (reader_.read(anno, temp_genos)) {
+      int cols2 = parseMarkers(anno, temp_genos);
       //notice("cols2 = %d",cols2);
       if ( cols2 >= 0 ) {
         if ( nInds != cols2 ) {
@@ -1294,48 +1295,52 @@ public:
     return( 2*(llk1 - llk0) );
   }
 private:
-  void loadGenos(const gt_vec& var)
+  void loadGenos(const std::vector<float>& g)
   {
-    for (auto it = var.begin(); it != var.end(); ++it)
-    {
-      genos.push_back(*it);
-      phases.push_back(0);
-    }
+    // TODO:
   }
 
-  void loadGenos(const ds_vec& var)
-  {
-    for (auto it = var.begin(); it != var.end(); ++it)
-    {
-      genos.push_back(*it);
-      phases.push_back(0);
-    }
-  }
-
-  void loadGenos(const gl_vec& var)
-  {
-    for (auto it = var.begin(); it != var.end(); ++it)
-    {
-      if ( *it < -25.5 ) PLs.push_back(255);
-      else PLs.push_back((std::uint8_t)(-10 * (*it) + 0.5));
-    }
-  }
-
-  void loadGenos(const pl_vec& var)
-  {
-    for (auto it = var.begin(); it != var.end(); ++it)
-    {
-      int pl = *it;
-      if (pl > 255)
-        pl = 255;
-      PLs.push_back((std::uint8_t)pl);
-    }
-  }
+//  void loadGenos(const gt_vec& var)
+//  {
+//    for (auto it = var.begin(); it != var.end(); ++it)
+//    {
+//      genos.push_back(*it);
+//      phases.push_back(0);
+//    }
+//  }
+//
+//  void loadGenos(const ds_vec& var)
+//  {
+//    for (auto it = var.begin(); it != var.end(); ++it)
+//    {
+//      genos.push_back(*it);
+//      phases.push_back(0);
+//    }
+//  }
+//
+//  void loadGenos(const gl_vec& var)
+//  {
+//    for (auto it = var.begin(); it != var.end(); ++it)
+//    {
+//      if ( *it < -25.5 ) PLs.push_back(255);
+//      else PLs.push_back((std::uint8_t)(-10 * (*it) + 0.5));
+//    }
+//  }
+//
+//  void loadGenos(const pl_vec& var)
+//  {
+//    for (auto it = var.begin(); it != var.end(); ++it)
+//    {
+//      int pl = *it;
+//      if (pl > 255)
+//        pl = 255;
+//      PLs.push_back((std::uint8_t)pl);
+//    }
+//  }
 };
 
-template<typename T>
-const float fVcf<T>::NAN_FLT = sqrtf(-1.);     // assign float  NAN value
-template<typename T>
-const double fVcf<T>::NAN_DBL = sqrt(-1.);  // assign double NAN value
+
+const float fVcf::NAN_FLT =  std::numeric_limits<float>::quiet_NaN(); //sqrtf(-1.);     // assign float  NAN value
+const double fVcf::NAN_DBL = std::numeric_limits<double>::quiet_NaN(); //sqrt(-1.);  // assign double NAN value
 
 #endif // __TABIXED_FVCF_H

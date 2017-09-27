@@ -90,9 +90,47 @@ int schr2nchr(const char* schr) {
   else { error("Cannot convert chromosome %s into PLINK format",schr); return 0; }
 }
 
-template <typename VecType>
-int runPairHMM(const pCHAPSArgs& arg, double mu, double theta) {
-  fVcf<VecType> tvcf;
+// run pairwise HMM to estimate the number of shared chromosomes
+int runPairHMM(int argc, char** argv) {
+  pCHAPSArgs arg;
+  arg.field = "PL";
+  double mu = 1e-8;
+  double theta = 1e-8; // .01 per Mb
+  ParameterList pl;
+
+  BEGIN_LONG_PARAMETERS(longParameters)
+    LONG_PARAMETER_GROUP("VCF Input Options")
+    LONG_STRINGPARAMETER("vcf",&arg.vcf)
+    LONG_STRINGPARAMETER("indf",&arg.indf)
+    LONG_STRINGPARAMETER("region",&arg.region)
+    LONG_STRINGPARAMETER("rule",&arg.rule)
+    LONG_STRINGPARAMETER("field",&arg.field)
+    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
+    LONG_INTPARAMETER("minMAC",&arg.minMAC)
+    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+    LONG_PARAMETER("sepchr",&arg.sepchr)
+
+    LONG_PARAMETER_GROUP("Other Input Options")
+    LONG_DOUBLEPARAMETER("mu",&mu)
+    LONG_DOUBLEPARAMETER("theta",&theta)
+
+    LONG_PARAMETER_GROUP("Output Options")
+    LONG_STRINGPARAMETER("out",&arg.outf)
+    LONG_PARAMETER("verbose",&arg.verbose)
+  END_LONG_PARAMETERS();
+
+  pl.Add(new LongParameters("Available Options", longParameters));
+  pl.Read(argc,argv);
+  pl.Status();
+
+  // sanity check of input arguments
+  if ( arg.vcf.empty() || arg.outf.empty()  ) {
+    error("--vcf, --out are required parameters (--indf are also recommended)");
+  }
+
+  fVcf tvcf;
   tvcf.load(arg.vcf.c_str(), arg.region.c_str(), arg.field.c_str(), arg.rule.c_str(), !arg.ignoreFilter, arg.indf.empty() ? NULL : arg.indf.c_str());
   int n = tvcf.nInds;
   int m = 0;
@@ -151,57 +189,6 @@ int runPairHMM(const pCHAPSArgs& arg, double mu, double theta) {
   delete [] PLs;
   wf.close();
   return 0;
-}
-
-// run pairwise HMM to estimate the number of shared chromosomes
-int runPairHMM(int argc, char** argv) {
-  pCHAPSArgs arg;
-  arg.field = "PL";
-  double mu = 1e-8;
-  double theta = 1e-8; // .01 per Mb
-  ParameterList pl;
-
-  BEGIN_LONG_PARAMETERS(longParameters)
-    LONG_PARAMETER_GROUP("VCF Input Options")
-    LONG_STRINGPARAMETER("vcf",&arg.vcf)
-    LONG_STRINGPARAMETER("indf",&arg.indf)
-    LONG_STRINGPARAMETER("region",&arg.region)
-    LONG_STRINGPARAMETER("rule",&arg.rule)
-    LONG_STRINGPARAMETER("field",&arg.field)
-    LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-    LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
-    LONG_INTPARAMETER("minMAC",&arg.minMAC)
-    LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-    LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-    LONG_PARAMETER("sepchr",&arg.sepchr)
-
-    LONG_PARAMETER_GROUP("Other Input Options")
-    LONG_DOUBLEPARAMETER("mu",&mu)
-    LONG_DOUBLEPARAMETER("theta",&theta)
-
-    LONG_PARAMETER_GROUP("Output Options")
-    LONG_STRINGPARAMETER("out",&arg.outf)
-    LONG_PARAMETER("verbose",&arg.verbose)
-  END_LONG_PARAMETERS();
-
-  pl.Add(new LongParameters("Available Options", longParameters));
-  pl.Read(argc,argv);
-  pl.Status();
-
-  // sanity check of input arguments
-  if ( arg.vcf.empty() || arg.outf.empty()  ) {
-    error("--vcf, --out are required parameters (--indf are also recommended)");
-  }
-
-  if (arg.field == "GT") return runPairHMM<gt_vec>(arg, mu, theta);
-  else if (arg.field == "PL") return runPairHMM<pl_vec>(arg, mu, theta);
-  else if (arg.field == "GL") return runPairHMM<gl_vec>(arg, mu, theta);
-  else if (arg.field == "DS" || arg.field == "EC") return runPairHMM<ds_vec>(arg, mu, theta);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
 }
 
 int runBuildGraph(int argc, char** argv) {

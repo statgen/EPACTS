@@ -656,7 +656,6 @@ public:
   }
 };
 
-template <typename VecType>
 class pEmmax {
  public:
   // below is for member variables and functions
@@ -666,7 +665,7 @@ class pEmmax {
   VectorXd y, evalR; // phenotypes
   MatrixXd X, evecR, T; // covariates
   MatrixXd K, Ks, P; // kinship matrices
-  fVcf<VecType> tvcf;  // VCF file
+  fVcf tvcf;  // VCF file
   std::vector<std::string> inds;
   std::vector<std::string> pedcols;
 
@@ -1015,7 +1014,6 @@ class pEmmax {
  }
 };
 
-template <typename VecType>
 class pEmmaxMulti {
  public:
   // below is for member variables and functions
@@ -1025,7 +1023,7 @@ class pEmmaxMulti {
   VectorXd evalR;    // eigenvalues
   MatrixXd Y, X, evecR, T; // covariates
   MatrixXd K, P; // kinship matrices
-  fVcf<VecType> tvcf;  // VCF file
+  fVcf tvcf;  // VCF file
   std::vector<std::string> inds;
   std::vector<std::string> pedcols;
 

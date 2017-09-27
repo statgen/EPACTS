@@ -72,7 +72,6 @@ public:
   {}
 };
 
-template <typename VecType>
 class vcfHashKey {
 public:
   std::string genos;
@@ -81,7 +80,7 @@ public:
   int ald;
   int tstv;
 
-  vcfHashKey(fVcf<VecType>& vcf, int i, bool genoFlag, bool acFlag, bool anFlag, bool aldFlag, bool tstvFlag, bool ignoreMissing)  {
+  vcfHashKey(fVcf& vcf, int i, bool genoFlag, bool acFlag, bool anFlag, bool aldFlag, bool tstvFlag, bool ignoreMissing)  {
     if ( genoFlag ) {
       float g;
       genos.resize(vcf.nInds);
@@ -200,8 +199,7 @@ public:
   }
 };
 
-template <typename VecType>
-void hashBit(fVcf<VecType>& vcf, unsigned char* bytes, int isnp)  {
+void hashBit(fVcf& vcf, unsigned char* bytes, int isnp)  {
   // we fill from the higher order
   float g;
   int nbytes = (vcf.nInds + 3) / 4;
@@ -253,7 +251,7 @@ int runSummary(int argc, char** argv) {
     error("--vcf, --out are required parameters (--indf are also recommended)");
   }
 
-  fVcf<gt_vec> tvcf;
+  fVcf tvcf;
   tvcf.load(arg.vcf.c_str(), arg.region.c_str(), "GT", arg.rule.c_str(), !arg.ignoreFilter, arg.indf.empty() ? NULL : arg.indf.c_str());
   int n = tvcf.nInds;
   int i = 0, m = 0, j = 0;
@@ -392,10 +390,68 @@ int schr2nchr(const char* schr) {
   else { error("Cannot convert chromosome %s into PLINK format",schr); return 0; }
 }
 
-template <typename VecType>
-int runConvert(pVPHArgs& arg, const std::string& markerId, double maxR2, int winR2, bool outvcf, bool outplink, bool outmatrix) {
+
+// variable threshold test
+int runConvert(int argc, char** argv) {
+  error("conversion temporarily disabled!");
+  return -1;
+  // Parse the input arguments
+  bool outvcf = false;
+  bool outplink = false;
+  bool outmatrix = true;
+  double maxR2 = 1;
+  int winR2 = 0;
+  pVPHArgs arg;
+  arg.field = "GT";
+  std::string markerId;
+  ParameterList pl;
+
+  BEGIN_LONG_PARAMETERS(longParameters)
+      LONG_PARAMETER_GROUP("VCF Input Options")
+      LONG_STRINGPARAMETER("vcf",&arg.vcf)
+      LONG_STRINGPARAMETER("indf",&arg.indf)
+      LONG_STRINGPARAMETER("bedf",&arg.bedf)
+      LONG_STRINGPARAMETER("field",&arg.field)
+      LONG_STRINGPARAMETER("region",&arg.region)
+      LONG_STRINGPARAMETER("marker-id",&markerId)
+      LONG_STRINGPARAMETER("rule",&arg.rule)
+      LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
+      LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
+      LONG_INTPARAMETER("minMAC",&arg.minMAC)
+      LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
+      LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
+      LONG_PARAMETER("sepchr",&arg.sepchr)
+
+      LONG_PARAMETER_GROUP("LD pruning Options")
+      LONG_INTPARAMETER("win-r2",&winR2)
+      LONG_DOUBLEPARAMETER("max-r2",&maxR2)
+
+      LONG_PARAMETER_GROUP("Output format")
+      EXCLUSIVE_PARAMETER("outvcf",&outvcf)
+      EXCLUSIVE_PARAMETER("outplink",&outplink)
+      EXCLUSIVE_PARAMETER("outmatrix",&outmatrix)
+
+      LONG_PARAMETER_GROUP("Output Options")
+      LONG_STRINGPARAMETER("out",&arg.outf)
+      LONG_PARAMETER("verbose",&arg.verbose)
+  END_LONG_PARAMETERS();
+
+  pl.Add(new LongParameters("Available Options", longParameters));
+  pl.Read(argc,argv);
+  pl.Status();
+
+  // sanity check of input arguments
+  if ( arg.vcf.empty() || arg.outf.empty()  ) {
+    error("--vcf, --out are required parameters (--indf are also recommended)");
+  }
+
+  if ( !( outvcf || outplink || outmatrix ) ) {
+    warning("Default option --outmatrix was turned off. Turning in again..");
+    outmatrix = true;
+  }
+
   bool gtFlag = (arg.field == "GT");
-  fVcf<VecType> tvcf;
+  fVcf tvcf;
 
   if ( ( !arg.region.empty() ) && ( !markerId.empty() ) ) {
     error("--region and --marker-id cannot be combined together");
@@ -633,46 +689,35 @@ int runConvert(pVPHArgs& arg, const std::string& markerId, double maxR2, int win
     delete [] genos;
   }
   return 0;
+
 }
+
 // variable threshold test
-int runConvert(int argc, char** argv) {
-  error("conversion temporarily disabled!");
-  return -1;
-  // Parse the input arguments
-  bool outvcf = false;
-  bool outplink = false;
-  bool outmatrix = true;
-  double maxR2 = 1;
-  int winR2 = 0;
+int runPairLD(int argc, char** argv) {
+  double minR2 = 1;
+  int winR2 = 1000;
   pVPHArgs arg;
+  bool ignorePhase = false;
   arg.field = "GT";
-  std::string markerId;
   ParameterList pl;
 
   BEGIN_LONG_PARAMETERS(longParameters)
       LONG_PARAMETER_GROUP("VCF Input Options")
       LONG_STRINGPARAMETER("vcf",&arg.vcf)
       LONG_STRINGPARAMETER("indf",&arg.indf)
-      LONG_STRINGPARAMETER("bedf",&arg.bedf)
       LONG_STRINGPARAMETER("field",&arg.field)
       LONG_STRINGPARAMETER("region",&arg.region)
-      LONG_STRINGPARAMETER("marker-id",&markerId)
       LONG_STRINGPARAMETER("rule",&arg.rule)
       LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
       LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
       LONG_INTPARAMETER("minMAC",&arg.minMAC)
       LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
       LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-      LONG_PARAMETER("sepchr",&arg.sepchr)
+      LONG_PARAMETER("ignorePhase",&ignorePhase)
 
       LONG_PARAMETER_GROUP("LD pruning Options")
       LONG_INTPARAMETER("win-r2",&winR2)
-      LONG_DOUBLEPARAMETER("max-r2",&maxR2)
-
-      LONG_PARAMETER_GROUP("Output format")
-      EXCLUSIVE_PARAMETER("outvcf",&outvcf)
-      EXCLUSIVE_PARAMETER("outplink",&outplink)
-      EXCLUSIVE_PARAMETER("outmatrix",&outmatrix)
+      LONG_DOUBLEPARAMETER("min-r2",&minR2)
 
       LONG_PARAMETER_GROUP("Output Options")
       LONG_STRINGPARAMETER("out",&arg.outf)
@@ -688,28 +733,8 @@ int runConvert(int argc, char** argv) {
     error("--vcf, --out are required parameters (--indf are also recommended)");
   }
 
-  if ( !( outvcf || outplink || outmatrix ) ) {
-    warning("Default option --outmatrix was turned off. Turning in again..");
-    outmatrix = true;
-  }
-
-  if (arg.field == "GT") return runConvert<gt_vec>(arg, markerId, maxR2, winR2, outvcf, outplink, outmatrix);
-  else if (arg.field == "PL") return runConvert<pl_vec>(arg, markerId, maxR2, winR2, outvcf, outplink, outmatrix);
-  else if (arg.field == "GL") return runConvert<gl_vec>(arg, markerId, maxR2, winR2, outvcf, outplink, outmatrix);
-  else if (arg.field == "DS" || arg.field == "EC") return runConvert<ds_vec>(arg, markerId, maxR2, winR2, outvcf, outplink, outmatrix);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
-
-}
-
-template <typename VecType>
-int runPairLD(const pVPHArgs& arg, double minR2, int winR2, bool ignorePhase)
-{
   bool gtFlag = (arg.field == "GT");
-  fVcf<VecType> tvcf;
+  fVcf tvcf;
 
   tvcf.load(arg.vcf.c_str(), arg.region.c_str(), arg.field.c_str(), arg.rule.c_str(), !arg.ignoreFilter, arg.indf.empty() ? NULL : arg.indf.c_str());
 
@@ -863,13 +888,15 @@ int runPairLD(const pVPHArgs& arg, double minR2, int winR2, bool ignorePhase)
   return 0;
 }
 
-// variable threshold test
-int runPairLD(int argc, char** argv) {
-  double minR2 = 1;
-  int winR2 = 1000;
+// create the list of r2 and 
+int runIndexLD(int argc, char** argv) {
+  // Parse the input arguments
+  std::string index;
+  double minR2 = 0;
+  int win = 1000000;
   pVPHArgs arg;
-  bool ignorePhase = false;
   arg.field = "GT";
+  bool ignorePhase = false;
   ParameterList pl;
 
   BEGIN_LONG_PARAMETERS(longParameters)
@@ -885,9 +912,11 @@ int runPairLD(int argc, char** argv) {
       LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
       LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
       LONG_PARAMETER("ignorePhase",&ignorePhase)
+      LONG_PARAMETER("sepchr",&arg.sepchr)
 
-      LONG_PARAMETER_GROUP("LD pruning Options")
-      LONG_INTPARAMETER("win-r2",&winR2)
+      LONG_PARAMETER_GROUP("Index SNP position")
+      LONG_STRINGPARAMETER("index",&index)
+      LONG_INTPARAMETER("win",&win)
       LONG_DOUBLEPARAMETER("min-r2",&minR2)
 
       LONG_PARAMETER_GROUP("Output Options")
@@ -900,25 +929,11 @@ int runPairLD(int argc, char** argv) {
   pl.Status();
 
   // sanity check of input arguments
-  if ( arg.vcf.empty() || arg.outf.empty()  ) {
-    error("--vcf, --out are required parameters (--indf are also recommended)");
+  if ( arg.vcf.empty() || index.empty() || arg.outf.empty()  ) {
+    error("--vcf, --index, --out are required parameters (--indf are also recommended)");
   }
 
-  if (arg.field == "GT") return runPairLD<gt_vec>(arg, minR2, winR2, ignorePhase);
-  else if (arg.field == "PL") return runPairLD<pl_vec>(arg, minR2, winR2, ignorePhase);
-  else if (arg.field == "GL") return runPairLD<gl_vec>(arg, minR2, winR2, ignorePhase);
-  else if (arg.field == "DS" || arg.field == "EC") return runPairLD<ds_vec>(arg, minR2, winR2, ignorePhase);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
-}
-
-template <typename VecType>
-int runIndexLD(pVPHArgs& arg, const std::string& index, double minR2, int win, bool ignorePhase)
-{
-  fVcf<VecType> tvcf;
+  fVcf tvcf;
 
   // parse index SNP info and convert it into regions
   std::vector<std::string> tokens;
@@ -1078,62 +1093,6 @@ int runIndexLD(pVPHArgs& arg, const std::string& index, double minR2, int win, b
   notice("Successfully wrote %d variants at r2 threshold %f",nout,minR2);
   wf.close();
   return 0;
-}
-
-// create the list of r2 and 
-int runIndexLD(int argc, char** argv) {
-  // Parse the input arguments
-  std::string index;
-  double minR2 = 0;
-  int win = 1000000;
-  pVPHArgs arg;
-  arg.field = "GT";
-  bool ignorePhase = false;
-  ParameterList pl;
-
-  BEGIN_LONG_PARAMETERS(longParameters)
-      LONG_PARAMETER_GROUP("VCF Input Options")
-      LONG_STRINGPARAMETER("vcf",&arg.vcf)
-      LONG_STRINGPARAMETER("indf",&arg.indf)
-      LONG_STRINGPARAMETER("field",&arg.field)
-      LONG_STRINGPARAMETER("region",&arg.region)
-      LONG_STRINGPARAMETER("rule",&arg.rule)
-      LONG_DOUBLEPARAMETER("minMAF",&arg.minMAF)
-      LONG_DOUBLEPARAMETER("maxMAF",&arg.maxMAF)
-      LONG_INTPARAMETER("minMAC",&arg.minMAC)
-      LONG_DOUBLEPARAMETER("minCallRate",&arg.minCallRate)
-      LONG_PARAMETER("ignoreFilter",&arg.ignoreFilter)
-      LONG_PARAMETER("ignorePhase",&ignorePhase)
-      LONG_PARAMETER("sepchr",&arg.sepchr)
-
-      LONG_PARAMETER_GROUP("Index SNP position")
-      LONG_STRINGPARAMETER("index",&index)
-      LONG_INTPARAMETER("win",&win)
-      LONG_DOUBLEPARAMETER("min-r2",&minR2)
-
-      LONG_PARAMETER_GROUP("Output Options")
-      LONG_STRINGPARAMETER("out",&arg.outf)
-      LONG_PARAMETER("verbose",&arg.verbose)
-  END_LONG_PARAMETERS();
-
-  pl.Add(new LongParameters("Available Options", longParameters));
-  pl.Read(argc,argv);
-  pl.Status();
-
-  // sanity check of input arguments
-  if ( arg.vcf.empty() || index.empty() || arg.outf.empty()  ) {
-    error("--vcf, --index, --out are required parameters (--indf are also recommended)");
-  }
-
-  if (arg.field == "GT") return runIndexLD<gt_vec>(arg, index, minR2, win, ignorePhase);
-  else if (arg.field == "PL") return runIndexLD<pl_vec>(arg, index, minR2, win, ignorePhase);
-  else if (arg.field == "GL") return runIndexLD<gl_vec>(arg, index, minR2, win, ignorePhase);
-  else if (arg.field == "DS" || arg.field == "EC") return runIndexLD<ds_vec>(arg, index, minR2, win, ignorePhase);
-  else
-  {
-    error("%s not supported", arg.field.c_str());
-    return -1;
-  }
 }
 
 // create the list of r2 and 
