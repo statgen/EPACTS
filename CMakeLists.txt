@@ -7,13 +7,14 @@ set(CMAKE_CXX_STANDARD 14)
 find_package(ZLIB REQUIRED)
 find_library(HTS_LIBRARY hts)
 find_package(savvy REQUIRED)
+find_package(Threads)
 
 add_custom_target(epactsR ALL COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} data/epactsR_3.3.2.tar.gz WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} COMMENT "Builing epactsR ...")
 add_custom_target(mmSKAT ALL COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} data/mmSKAT_0.95.tar.gz WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} COMMENT "Builing mmSKAT ...")
 
 add_library(libtabix src/bedidx.c src/knetfile.c src/index.c)
 set_target_properties(libtabix PROPERTIES PREFIX "")
-target_link_libraries(libtabix ${ZLIB_LIBRARIES} ${HTS_LIBRARY})
+target_link_libraries(libtabix ${ZLIB_LIBRARIES} ${HTS_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(pEmmax src/pEmmax.cpp src/Parameters.cpp src/Error.cpp src/PhredHelper.cpp src/codonHelper.cpp src/fVcf.h)
 target_link_libraries(pEmmax libtabix savvy)
@@ -29,10 +30,10 @@ add_executable(anno src/Anno.cpp src/IO.cpp)
 target_link_libraries(anno libtabix)
 
 add_executable(bgzip src/bgzip.c src/bedidx.c src/knetfile.c src/kstring.c)
-target_link_libraries(bgzip ${ZLIB_LIBRARIES} ${HTS_LIBRARY})
+target_link_libraries(bgzip ${ZLIB_LIBRARIES} ${HTS_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(tabix src/tabix.c src/bedidx.c src/knetfile.c src/kstring.c src/index.c)
-target_link_libraries(tabix ${ZLIB_LIBRARIES} ${HTS_LIBRARY})
+target_link_libraries(tabix ${ZLIB_LIBRARIES} ${HTS_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
 
 file(GLOB_RECURSE EPACTS_PERL_SCRIPTS "scripts/ep*" "scripts/wGetOptions.pm")
 file(GLOB_RECURSE EPACTS_R_SCRIPTS "data/*.R")
