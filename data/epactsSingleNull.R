@@ -146,7 +146,7 @@ ScoreTest_wSaddleApprox_NULL_Model <- function(formula, data=NULL)
 	if(glmfit$converged)
 	{
 		mu = glmfit$fitted.values
-		if(mean(mu)/mean(glmfit$y)>0.001 & (1-mean(mu))/(1-mean(glmfit$y))>0.001)	convflag==1	#Check that the null model converged properly with glm
+		if(mean(mu)/mean(glmfit$y)>0.001 & (1-mean(mu))/(1-mean(glmfit$y))>0.001)	convflag<-1	#Check that the null model converged properly with glm
 	}
 	if(convflag==0)
 	{
