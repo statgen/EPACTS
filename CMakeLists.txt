@@ -9,8 +9,31 @@ find_library(HTS_LIBRARY hts)
 find_package(savvy REQUIRED)
 find_package(Threads)
 
-add_custom_target(epactsR ALL COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} data/epactsR_3.3.2.tar.gz WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} COMMENT "Builing epactsR ...")
-add_custom_target(mmSKAT ALL COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} data/mmSKAT_0.95.tar.gz WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} COMMENT "Builing mmSKAT ...")
+#add_custom_target(epactsR ALL COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} data/epactsR_3.3.2.tar.gz WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} COMMENT "Builing epactsR ...")
+#add_custom_target(mmSKAT ALL COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} data/mmSKAT_0.95.tar.gz WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} COMMENT "Builing mmSKAT ...")
+
+add_custom_target(epactsR-build
+                  R CMD BUILD  ${CMAKE_CURRENT_SOURCE_DIR}/epactsR
+                  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                  COMMENT "Builing epactsR ...")
+add_custom_target(epactsR-install
+                  ALL
+                  DEPENDS epactsR-build
+                  #${CMAKE_COMMAND} -E env CPLUS_INCLUDE_PATH=${CMAKE_SOURCE_DIR}/cget/include LIBRARY_PATH=${CMAKE_SOURCE_DIR}/cget/lib R CMD INSTALL -l ${CMAKE_BINARY_DIR} epactsR_3.3.3.tar.gz
+                  COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} --configure-vars='INCLUDE_DIR=${CMAKE_SOURCE_DIR}/cget/include LINK_DIR=${CMAKE_SOURCE_DIR}/cget/lib' epactsR_3.3.3.tar.gz
+                  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                  COMMENT "Installing epactsR ...")
+
+add_custom_target(mmSKAT-build
+                  COMMAND R CMD BUILD ${CMAKE_CURRENT_SOURCE_DIR}/mmSKAT
+                  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                  COMMENT "Builing mmSKAT ...")
+add_custom_target(mmSKAT-install
+                  ALL
+                  DEPENDS mmSKAT-build
+                  COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} mmSKAT_0.95.tar.gz
+                  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                  COMMENT "Installing mmSKAT ...")
 
 add_library(libtabix src/bedidx.c src/knetfile.c src/index.c)
 set_target_properties(libtabix PROPERTIES PREFIX "")
@@ -43,5 +66,5 @@ install(FILES ${EPACTS_PERL_SCRIPTS}
         DESTINATION bin)
 install(FILES ${EPACTS_R_SCRIPTS} DESTINATION share/EPACTS)
 install(TARGETS pEmmax vcfast chaps anno bgzip tabix RUNTIME DESTINATION bin)
-install(DIRECTORY ${CMAKE_BINARY_DIR}/epactsR DESTINATION lib)
-install(DIRECTORY ${CMAKE_BINARY_DIR}/mmSKAT DESTINATION lib)
+install(DIRECTORY ${CMAKE_BINARY_DIR}/epactsR DESTINATION lib) #install(DIRECTORY ${CMAKE_BINARY_DIR}/epactsR DESTINATION lib)
+install(DIRECTORY ${CMAKE_BINARY_DIR}/mmSKAT DESTINATION lib) #install(DIRECTORY ${CMAKE_BINARY_DIR}/mmSKAT DESTINATION lib)
