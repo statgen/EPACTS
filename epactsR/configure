@@ -1,5 +1,6 @@
 #!/bin/bash
 
-echo 'PKG_CXXFLAGS=--std=c++14 -pthread' > src/Makevars
+echo 'PKG_CXXFLAGS=-pthread' > src/Makevars
+echo 'CXX_STD=CXX14' >> src/Makevars
 echo "PKG_CPPFLAGS=-I${INCLUDE_DIR}" >> src/Makevars
 echo "PKG_LIBS=-L${LINK_DIR} -lz -lsavvy -lhts -lzstd -pthread" >> src/Makevars
