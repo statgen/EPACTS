@@ -13,7 +13,7 @@ find_package(Threads)
 #add_custom_target(mmSKAT ALL COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} data/mmSKAT_0.95.tar.gz WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} COMMENT "Builing mmSKAT ...")
 
 add_custom_target(epactsR-build
-                  R CMD BUILD  ${CMAKE_CURRENT_SOURCE_DIR}/epactsR
+                  COMMAND R CMD build  ${CMAKE_CURRENT_SOURCE_DIR}/epactsR
                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                   COMMENT "Builing epactsR ...")
 add_custom_target(epactsR-install
@@ -25,7 +25,7 @@ add_custom_target(epactsR-install
                   COMMENT "Installing epactsR ...")
 
 add_custom_target(mmSKAT-build
-                  COMMAND R CMD BUILD ${CMAKE_CURRENT_SOURCE_DIR}/mmSKAT
+                  COMMAND R CMD build ${CMAKE_CURRENT_SOURCE_DIR}/mmSKAT
                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                   COMMENT "Builing mmSKAT ...")
 add_custom_target(mmSKAT-install
