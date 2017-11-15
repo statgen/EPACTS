@@ -412,16 +412,17 @@ public:
     std::string alt = anno.alt();
     std::string markerId = anno.prop("ID");
     std::string markerKey = chrom+":"+pos+"_"+ref+"/"+alt;
-    if ( markerSet.find(markerKey) == markerSet.end() ) {
-      return -1;
+    if ( ! markerSet.empty() ) {
+      if ( markerSet.find(markerKey) == markerSet.end() ) {
+        std::cerr << "markerSet size:" << markerSet.size() << std::endl;
+        return -1;
+      }
     }
     if ( ( passOnly ) && ( anno.prop("FILTER") != "PASS" ) ) return -1;
-
     std::string s;
     int keyIdx = 0;
     int i, j, k, l;
     int lKey = (int)key.size();
-
     int AN = atoi(anno.prop("AN").c_str()) + 3;
     float AC = atoi(anno.prop("AC").c_str()) + 3;
     float sqAC = 0.0;
@@ -433,18 +434,15 @@ public:
       sqAC = floor(2*AN*af*(1.+af)+.5); // assumes HWE sqAC = p^2 * 4 + 2p(1-p) = 2p(1+p)
     }
 
+    loadGenos(temp_genos);
 
-
-    j = temp_genos.size();
+    j = genos.size();
     if ( (nInds == 0) && icols.empty() && ((int)genos.size() == j) ) nInds = j;
 
     if ( nInds != j ) {
       fprintf(stderr,"j=%d, nInds=%d, icols.size()=%d, genos.back()=%d\n",j,nInds,(int)icols.size(),(int)genos.back());
       abort();
     }
-
-    loadGenos(temp_genos);
-
     // if GL or PL flag is set, automatically put dosage as quantitative genotypes
     if (key == "GL" || key == "PL") {
       //notice("fVcf::parseMarkers() - glFlag is on");
@@ -950,7 +948,7 @@ public:
   }
 
   template <typename SampleIter>
-  int parseInds(SampleIter sample_beg, SampleIter sample_end, std::set<std::string>& idset, int startIdx = 9) {
+  int parseInds(SampleIter sample_beg, SampleIter sample_end, std::set<std::string>& idset, int startIdx = 0) {
     int i, j;
 
     icols.clear();
@@ -969,7 +967,7 @@ public:
   }
 
   template <typename SampleIter>
-  int parseInds(SampleIter sample_beg, SampleIter sample_end, std::vector<std::string>& subids, int startIdx = 9) {
+  int parseInds(SampleIter sample_beg, SampleIter sample_end, std::vector<std::string>& subids, int startIdx = 0) {
     int i, j;
 
     icols.clear();
@@ -990,7 +988,7 @@ public:
   }
 
   template <typename SampleIter>
-  int parseInds(SampleIter sample_beg, SampleIter sample_end, std::vector<int>& subcols, int startIdx = 9) {
+  int parseInds(SampleIter sample_beg, SampleIter sample_end, std::vector<int>& subcols, int startIdx = 0) {
     //notice("fVcf::parseInds(char*, std::vector<int>&) called");
     int i, j;
 
@@ -1106,7 +1104,6 @@ public:
     parseInds(reader_.samples_begin(), reader_.samples_end(), icols);
 
     //fprintf(stderr,"fVcf::readMarkers(%d) called",m);
-
     while (reader_.read(anno, temp_genos)) {
       int cols2 = parseMarkers(anno, temp_genos);
       //notice("cols2 = %d",cols2);
