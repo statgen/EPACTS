@@ -1297,6 +1297,9 @@ public:
 private:
   void loadGenos(const std::vector<float>& g)
   {
+    genos.resize(0);
+    genos.reserve(g.size());
+
     if (key == "DS")
     {
       for (auto it = g.begin(); it != g.end(); ++it)
