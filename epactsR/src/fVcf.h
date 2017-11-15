@@ -400,7 +400,7 @@ public:
     }
   }
 
-  int parseMarkers(const savvy::site_info& anno, const std::vector<float>& temp_genos, int startIdx = 9) {
+  int parseMarkers(const savvy::site_info& anno, const std::vector<float>& temp_genos) {
     //notice("fVcf::parseMarkers() called");
     //, std::vector<std::string>& m, std::vector<float>& v, int startIdx = 9, const char* key = "GT", const char** infoSubstrs = NULL, int nSubstr = 0) {
     char* p;
@@ -1294,6 +1294,9 @@ public:
 private:
   void loadGenos(const std::vector<float>& g)
   {
+    genos.resize(0);
+    genos.reserve(g.size());
+
     if (key == "DS")
     {
       for (auto it = g.begin(); it != g.end(); ++it)
