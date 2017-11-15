@@ -407,7 +407,7 @@ public:
     char* n;
 
     std::string chrom = anno.chromosome();
-    std::string pos = std::to_string(anno.locus());
+    std::string pos = std::to_string(anno.position());
     std::string ref = anno.ref();
     std::string alt = anno.alt();
     std::string markerId = anno.prop("ID");
@@ -617,15 +617,15 @@ public:
 	      if ( c1 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
 	      c2 = strchr(c1+1,',');
 	      if ( c2 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
-	      
+
 	      gl = strtof(p,NULL);
 	      if ( gl < -25.5 ) pls[0] = 255;
 	      else pls[0] = (int)(-10*gl+.5);
-	      
+
 	      gl = strtof(c1+1,NULL);
 	      if ( gl < -25.5 ) pls[1] = 255;
 	      else pls[1] = (int)(-10*gl+.5);
-	      
+
 	      gl = strtof(c2+1,NULL);
 	      if ( gl < -25.5 ) pls[2] = 255;
 	      else pls[2] = (int)(-10*gl+.5);
@@ -635,7 +635,7 @@ public:
 	      if ( c1 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
 	      c2 = strchr(c1+1,',');
 	      if ( c2 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
-	      
+
 	      pl = atoi(p);
 	      if ( pl > 255 ) pl = 255;
 	      pls[0] = pl;
@@ -654,8 +654,8 @@ public:
 
 	  genos.push_back(gt);
 	  phases.push_back(phase);
-	  PLs.push_back(pls[0]); 	  
-	  PLs.push_back(pls[1]); 
+	  PLs.push_back(pls[0]);
+	  PLs.push_back(pls[1]);
 	  PLs.push_back(pls[2]);
 	  depths.push_back(dp);
 	  if ( !isnan(gt) ) {
@@ -717,7 +717,7 @@ public:
 
     std::vector<int> iNames;
     std::vector<int> iFields;
-    
+
     int GTidx = -1, PLidx = -1, GLidx = -1, DPidx = -1, GDidx = -1;
 
     int i, j;
@@ -817,15 +817,15 @@ public:
 	      if ( c1 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
 	      c2 = strchr(c1+1,',');
 	      if ( c2 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
-	      
+
 	      gl = strtof(p,NULL);
 	      if ( gl < -25.5 ) pls[0] = 255;
 	      else pls[0] = (int)(-10*gl+.5);
-	      
+
 	      gl = strtof(c1+1,NULL);
 	      if ( gl < -25.5 ) pls[1] = 255;
 	      else pls[1] = (int)(-10*gl+.5);
-	      
+
 	      gl = strtof(c2+1,NULL);
 	      if ( gl < -25.5 ) pls[2] = 255;
 	      else pls[2] = (int)(-10*gl+.5);
@@ -835,7 +835,7 @@ public:
 	      if ( c1 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
 	      c2 = strchr(c1+1,',');
 	      if ( c2 == NULL ) error("Cannot parse %s field (currently suppports only biallelic autosomal variants",key.c_str());
-	      
+
 	      pl = atoi(p);
 	      if ( pl > 255 ) pl = 255;
 	      pls[0] = pl;
@@ -854,8 +854,8 @@ public:
 
 	  genos.push_back(gt);
 	  phases.push_back(phase);
-	  PLs.push_back(pls[0]); 	  
-	  PLs.push_back(pls[1]); 
+	  PLs.push_back(pls[0]);
+	  PLs.push_back(pls[1]);
 	  PLs.push_back(pls[2]);
 	  depths.push_back(dp);
 	  if ( !isnan(gt) ) {
@@ -1128,9 +1128,9 @@ public:
   int fullReadMarkers(int m = 0, bool del = true) {
     //int nc;
     char* line = NULL;
-    
+
     if ( del ) clear();
-    
+
     int mStart = nMarkers;
 
     //notice("fVcf::readMarkers(%d) called",m);
@@ -1145,7 +1145,7 @@ public:
 	}
       }
       else {
-	int cols2 = fullParseMarkers(line); 
+	int cols2 = fullParseMarkers(line);
 	//notice("cols2 = %d",cols2);
 	if ( cols2 >= 0 ) {
 	  if ( nInds != cols2 ) {
@@ -1173,7 +1173,7 @@ public:
       std::cerr << "Cannot open file " << filename << " for reading" << std::endl;
       return NULL;
     }
-    
+
     std::string fn(filename);
     FILE* fp;
     if ( fn.substr(fn.size()-3) == ".gz" ) {
@@ -1208,8 +1208,8 @@ public:
      Computes HWE allele frequencies using EM algorithm
      Input:
      1)Genotype Likelihoods (qscores)
-     
-     Output: 
+
+     Output:
      1) estimated HWE allele frequencies
      2) sample size
   */
@@ -1223,7 +1223,7 @@ public:
   }
 
   std::pair<double,double> emAF(int m, std::vector<int>& indices, double eps) {
-    // initialization : pick an arbitrary AF from 
+    // initialization : pick an arbitrary AF from
     //notice("fVcf::emAF(%d, %d, %lf), p2e.size() = %d",m,(int)indices.size(),eps,(int)p2e.size());
 
     std::vector<int>::iterator it;
@@ -1297,7 +1297,40 @@ public:
 private:
   void loadGenos(const std::vector<float>& g)
   {
-    // TODO:
+    if (key == "DS")
+    {
+      for (auto it = g.begin(); it != g.end(); ++it)
+      {
+        genos.push_back(*it);
+        phases.push_back(0);
+      }
+    }
+    else if (key == "GL")
+    {
+      for (auto it = g.begin(); it != g.end(); ++it)
+      {
+        if ( *it < -25.5 ) PLs.push_back(255);
+        else PLs.push_back((std::uint8_t)(-10 * (*it) + 0.5));
+      }
+    }
+    else if (key == "PL")
+    {
+      for (auto it = g.begin(); it != g.end(); ++it)
+      {
+        int pl = (int)(*it);
+        if (pl > 255)
+          pl = 255;
+        PLs.push_back((std::uint8_t) pl);
+      }
+    }
+    else // GT
+    {
+      for (auto it = g.begin(); it != g.end(); ++it)
+      {
+        genos.push_back(*it);
+        phases.push_back(0);
+      }
+    }
   }
 
 //  void loadGenos(const gt_vec& var)
