@@ -3,4 +3,4 @@
 echo 'PKG_CXXFLAGS=--std=c++11' > src/Makevars
 #echo 'CXX_STD=CXX11' > src/Makevars
 echo "PKG_CPPFLAGS=-I${INCLUDE_DIR}" >> src/Makevars
-echo "PKG_LIBS=-L${LINK_DIR} -lz -lsavvy -lhts -lzstd" >> src/Makevars
+echo "PKG_LIBS=-Wl,-rpath,${LINK_DIR} -L${LINK_DIR} -lz -lzstd -lhts -lsavvy" >> src/Makevars
