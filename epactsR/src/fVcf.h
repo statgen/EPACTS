@@ -1101,8 +1101,7 @@ public:
 
     int mStart = nMarkers;
 
-    parseInds(reader_.samples_begin(), reader_.samples_end(), icols);
-
+    //parseInds(reader_.samples_begin(), reader_.samples_end(), icols);
     //fprintf(stderr,"fVcf::readMarkers(%d) called",m);
     while (reader_.read(anno, temp_genos)) {
       int cols2 = parseMarkers(anno, temp_genos);
@@ -1297,38 +1296,35 @@ private:
     genos.resize(0);
     genos.reserve(g.size());
 
-    if (key == "DS")
+    std::size_t i = 0;
+    std::size_t j = 0;
+    for (auto it = g.begin(); it != g.end(); ++it,++i)
     {
-      for (auto it = g.begin(); it != g.end(); ++it)
+      if (icols.empty() || (j < icols.size() && icols[j] == i))
       {
-        genos.push_back(*it);
-        phases.push_back(0);
-      }
-    }
-    else if (key == "GL")
-    {
-      for (auto it = g.begin(); it != g.end(); ++it)
-      {
-        if ( *it < -25.5 ) PLs.push_back(255);
-        else PLs.push_back((std::uint8_t)(-10 * (*it) + 0.5));
-      }
-    }
-    else if (key == "PL")
-    {
-      for (auto it = g.begin(); it != g.end(); ++it)
-      {
-        int pl = (int)(*it);
-        if (pl > 255)
-          pl = 255;
-        PLs.push_back((std::uint8_t) pl);
-      }
-    }
-    else // GT
-    {
-      for (auto it = g.begin(); it != g.end(); ++it)
-      {
-        genos.push_back(*it);
-        phases.push_back(0);
+        if (key == "DS")
+        {
+          genos.push_back(*it);
+          phases.push_back(0);
+        }
+        else if (key == "GL")
+        {
+          if ( *it < -25.5 ) PLs.push_back(255);
+          else PLs.push_back((std::uint8_t)(-10 * (*it) + 0.5));
+        }
+        else if (key == "PL")
+        {
+          int pl = (int)(*it);
+          if (pl > 255)
+            pl = 255;
+          PLs.push_back((std::uint8_t) pl);
+        }
+        else // GT
+        {
+          genos.push_back(*it);
+          phases.push_back(0);
+        }
+        ++j;
       }
     }
   }
