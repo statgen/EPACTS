@@ -434,9 +434,8 @@ public:
       sqAC = floor(2*AN*af*(1.+af)+.5); // assumes HWE sqAC = p^2 * 4 + 2p(1-p) = 2p(1+p)
     }
 
-    loadGenos(temp_genos);
+    j = loadGenos(temp_genos);
 
-    j = genos.size();
     if ( (nInds == 0) && icols.empty() && ((int)genos.size() == j) ) nInds = j;
 
     if ( nInds != j ) {
@@ -1291,10 +1290,9 @@ public:
     return( 2*(llk1 - llk0) );
   }
 private:
-  void loadGenos(const std::vector<float>& g)
+  std::size_t loadGenos(const std::vector<float>& g)
   {
-    genos.resize(0);
-    genos.reserve(g.size());
+    genos.reserve(genos.size() + g.size());
 
     std::size_t i = 0;
     std::size_t j = 0;
@@ -1327,6 +1325,7 @@ private:
         ++j;
       }
     }
+    return j;
   }
 
 //  void loadGenos(const gt_vec& var)

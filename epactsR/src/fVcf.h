@@ -1292,7 +1292,6 @@ public:
 private:
   std::size_t loadGenos(const std::vector<float>& g)
   {
-    //genos.resize(0);
     genos.reserve(genos.size() + g.size());
 
     std::size_t i = 0;
