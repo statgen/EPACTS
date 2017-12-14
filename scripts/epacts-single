@@ -6,8 +6,7 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs parsePheno readPedVcf $binR $binRscript $binrm $binmake $binawk $defaultfasta installPackages %ichrs forkExecWait getMosixCmd);
-
+use epacts qw(%chrsForBuild %szchrsForBuild %prefixForBuild parsePheno readPedVcf $binR $binRscript $binrm $binmake $binawk $defaultfasta installPackages %ichrsForBuild forkExecWait getMosixCmd);
 my $vcf = "";
 my $pheno = "";
 my @covs = ();
@@ -40,7 +39,7 @@ my $ref = "";
 my $topzoom = 0;
 my @condsnps = ();
 my $callregion = "";
-
+my $buildver = "hg19";
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
 wGetOptions(
@@ -79,6 +78,10 @@ wGetOptions(
 	       "VCF's FORMAT field of genotypes or dosages",
 	       "VCF's FORMAT field entry to extract the genotype or dosage information. By default, 'GT' is used. If 'PL' or 'GL' field is specified, the genotype likelihoods will be converted into genotype dosages whenever needed",
 	       ],
+     "buildver=s", [\$buildver,
+		   "Name of genome build",
+		   "Name of genome build used for the annotation. hg19 and hg38 are available options"],
+
     "unit=i",[\$unit,
 	      "Size of region in base pair for each parallelized run",
 	      "Size of region in base pair to run as a unit of parallelization. Default value is 1Mb",
@@ -179,9 +182,16 @@ unless ( ( $vcf ) && ( $test ) && ( $ped ) && ( $out ) ) {
     wpod2usage(2);
 }
 
+my @szchrs = @{$szchrsForBuild{$buildver}};
+my %ichrs = %{$ichrsForBuild{$buildver}};
+my @chrs = @{$chrsForBuild{$buildver}};
+my $prefix = $prefixForBuild{$buildver};
+$chr =~ s/^$prefix//;
+
 if ( $callregion ) {
     die "--chr and --region cannot be used together\n" if ( $chr );
     ($chr,$bprange) = split(/:/,$callregion);
+    $chr =~ s/^$prefix//;
     $bprange = "$bprange-".($szchrs[$ichrs{$chr}]) if ( ( $bprange =~ /^\d+$/ ) && defined($chr) && defined($ichrs{$chr}) && defined($szchrs[$ichrs{$chr}]) );
     die "Cannot parse --region $callregion. Must be in [chr]:[beg]-[end] or [chr]:[beg] format\n" unless ( ( $chr ) && ( $bprange =~ /^\d+\-\d+$/ ) );
 }
@@ -333,6 +343,7 @@ for(my $i=0; $i < @chrs; ++$i) {
 	    
 	    my $op = "$out.$chrs[$i].$start.$end";
 	    my $region = "$chrs[$i]:$start-$end";
+            $region = $prefix.$region;
 	    
 	    my $tgt = "$op.epacts";
 
