@@ -5,11 +5,14 @@ use lib "$FindBin::Bin";
 use File::Basename;
 
 ## Variables and methods shared across the package
-@EXPORT_OK = qw(%chrsForBuild %szchrsForBuild %cumszchrsMbForBuild %complexForBuild %prefixForBuild parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrsForBuild readPedVcf readPedVcfMulti readPedKinLabel $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binawk $binpfbtops $bingnuplot $binepstopdf $binsort $defaultfasta installPackages tofpos fromfpos forkExecWait);
+@EXPORT_OK = qw(%chrsForBuild %szchrsForBuild %cumszchrsMbForBuild %complexForBuild %prefixForBuild parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrsForBuild readPedVcf readPedVcfMulti readPedKinLabel $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binawk $binpfbtops $bingnuplot $binepstopdf $binsort %defaultfastaForBuild installPackages tofpos fromfpos forkExecWait);
 
 $epactsdir = dirname($FindBin::Bin);
 $datadir = "$epactsdir/share/EPACTS";
-$defaultfasta = "$datadir/human_g1k_v37.fasta";
+%defaultfastaForBuild = (
+                     hg19 => "$datadir/human_g1k_v37.fasta",
+                     hg38 => "$datadir/GRCh38_full_analysis_set_plus_decoy_hla.fa"
+                );
 
 $binR = "R";
 $binRscript = "Rscript"; #$binRscript = "R CMD BATCH --slave --no-save --no-restore";

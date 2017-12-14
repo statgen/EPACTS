@@ -9,10 +9,12 @@ use Net::FTP;
 
 my $man = 0;
 my $help = 0;
+my $buildver = "hg19";
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
 GetOptions("help|?" => \$help, 
 	   "man" => \$man,
+	   "buildver=s" => \$buildver,
     ) || pod2usage(2);
 
 pod2usage(1) if $help;
@@ -26,6 +28,12 @@ my $hostname = "ftp.1000genomes.ebi.ac.uk";
 my $dir = "/vol1/ftp/technical/reference";
 my $fasta = "human_g1k_v37.fasta.gz";
 my $fai = "human_g1k_v37.fasta.fai";
+
+if ($buildver =~ /hg38/) {
+   $dir .= "/GRCh38_reference_genome";
+   $fasta = "GRCh38_full_analysis_set_plus_decoy_hla.fa";
+   $fai = "$fasta.fai";
+}
 
 print "Connecting to $hostname\n";
 my $ftp = Net::FTP->new("$hostname", Debug => 0) or die "Cannot connect to $hostname $@";
@@ -47,10 +55,11 @@ $ftp->get("$fasta") or die "get $fasta failed ", $ftp->message;
 print "Moving $fasta to $datadir/\n";
 rename("$fasta","$datadir/$fasta");
 $ftp->quit;
-
-print "Decompressing the file\n";
-my $cmd = "gzip -d $datadir/$fasta";
-print "$cmd\n"; print `$cmd`;
+if ( $fasta =~ /\.gz$/ ){
+    print "Decompressing the file\n";
+    my $cmd = "gzip -d $datadir/$fasta";
+    print "$cmd\n"; print `$cmd`;
+}
 die "FATAL ERROR - epacts-download: Error occured while decompressing the FASTA file" if ( $? == -1 ); 
 
 print "Successfully installed the reference FASTA file\n";
@@ -68,6 +77,7 @@ epacts download
  Options (See details for more info):
    -help       Print out brief help message
    -man        Print the full documentation in man page style
+   -buildver   Genome build version available options hg19 and hg38
 
 =head1 EPACTS WIKI DOCUMENTASTION
 

@@ -6,7 +6,7 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs parsePheno readPedVcf readPedVcfMulti $binR $binRscript $binrm $binmake $binawk $defaultfasta installPackages %ichrs forkExecWait getMosixCmd);
+use epacts qw(%chrsForBuild %szchrsForBuild %prefixForBuild parsePheno readPedVcf readPedVcfMulti $binR $binRscript $binrm $binmake $binawk %defaultfastaForBuild installPackages %ichrsForBuild forkExecWait getMosixCmd);
 
 my $vcf = "";
 my @phenos = ();
@@ -40,7 +40,7 @@ my @condsnps = ();
 my $callregion = "";
 my $maxP = 1;
 my $compact = "";
-
+my $buildver = "hg19";
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
 wGetOptions(
@@ -79,6 +79,9 @@ wGetOptions(
 	       "VCF's FORMAT field of genotypes or dosages",
 	       "VCF's FORMAT field entry to extract the genotype or dosage information. By default, 'GT' is used. If 'PL' or 'GL' field is specified, the genotype likelihoods will be converted into genotype dosages whenever needed",
 	       ],
+    "buildver=s", [\$buildver,
+		   "Name of genome build",
+		   "Name of genome build used for the annotation. hg19 and hg38 are available options"],
     "unit=i",[\$unit,
 	      "Size of region in base pair for each parallelized run",
 	      "Size of region in base pair to run as a unit of parallelization. Default value is 1Mb",
@@ -202,7 +205,7 @@ my $eigf = "";
 my $tryf = "";
 my $remlFlag = 1;
 
-$ref = $defaultfasta if ( $ref eq "" );
+$ref = $defaultfastaForBuild{$buildver} if ( $ref eq "" );
 
 die "ERROR: Cannot find FASTA reference file $ref or $ref.fai. Please specify the correct FASTA file or turn off the --anno option\n" if ( ($anno) && (! ( ( -s $ref ) && ( -s "$ref.fai" ) ) ) );
 
@@ -301,6 +304,13 @@ if ( ( ! $sepchr ) && ( $vcf =~ /chr/ ) && ( ! $chr ) ) {
     print STDERR "*************************************************************************************\n";
 }
 
+my @szchrs = @{$szchrsForBuild{$buildver}};
+my %ichrs = %{$ichrsForBuild{$buildver}};
+my @chrs = @{$chrsForBuild{$buildver}};
+my $prefix = $prefixForBuild{$buildver};
+$chr =~ s/^$prefix//;
+
+
 open(MAK,">$out.Makefile") || die "Cannot open file $out.Makefile for writing\n";
 print MAK ".DELETE_ON_ERROR:\n\n";
 if ( $test eq "q.emmax" ) {  ## Need to generate kinship matrix and REML first
@@ -333,6 +343,7 @@ if ( $test eq "q.emmax" ) {  ## Need to generate kinship matrix and REML first
 		
 		my $op = "$out.$chrs[$i].$start.$end";
 		my $region = "$chrs[$i]:$start-$end";
+                $region = $prefix . $region;
 		
 		my $tgt = "$op.epacts.gz";
 		my $cmd = "$epactsdir/bin/pEmmax multi-assoc --vcf $cvcf --region $region --field $field --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC --maxP $maxP --tryf $tryf".($compact ? " --compact" : "");
@@ -420,6 +431,7 @@ else {
 
 		my $op = "$out.$chrs[$i].$start.$end";
 		my $region = "$chrs[$i]:$start-$end";
+                   $region = $prefix.$region;
 		
 		my $tgt = "$op.epacts.gz";
 		my $cmd = "$epactsdir/bin/pEmmax multi-assoc-plain --vcf $cvcf --region $region --field $field --indf $ind --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC --maxP $maxP --pheno $out.phe".($compact ? " --compact" : "");
