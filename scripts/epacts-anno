@@ -12,7 +12,7 @@ my $epactsdir = dirname($FindBin::Bin);
 my $datadir = "$epactsdir/share/EPACTS";
 my $in = "";
 my $out = "";
-my $db = "gencodeV14";
+my $db = "gencodeV27";
 my $buildver = "hg19";
 my $ref = $defaultfasta;
 my $codonf = "$datadir/codon.txt";
@@ -35,7 +35,7 @@ wGetOptions(
 	     "Prefix of annotation output files. If -out is not specified, the original file will be overwritten with annotation"],
     "db=s", [\$db,
 	     "Gene prediction database",
-	     "Database of gene prediction. gencodeV7, gencodeV14, and refGene are available options. Using --genef option can explictly point the gene prediction file in UCSC format"],
+	     "Database of gene prediction. gencodeV7, gencodeV14, genecodeV27 and refGene are available options. Using --genef option can explictly point the gene prediction file in UCSC format"],
     "buildver=s", [\$buildver,
 		   "Name of genome build",
 		   "Name of genome build used for the annotation. hg19 is available option"],
