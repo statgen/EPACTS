@@ -6,7 +6,7 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wGetOptions wpod2usage);
-use epacts qw(@chrsForBuild @szchrsForBuild @cumszchrsMbForBuild $prefixForBuild parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrsForBuild readPedVcf $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binpfbtops $bingnuplot $binepstopdf $binsort $binawk );
+use epacts qw(%chrsForBuild %szchrsForBuild %cumszchrsMbForBuild %prefixForBuild parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrsForBuild readPedVcf $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binpfbtops $bingnuplot $binepstopdf $binsort $binawk );
 
 my $in = "";
 my $thinUnit = 0.01;
@@ -134,6 +134,11 @@ my @colors = ("167D19","F71A1B","0000FF","666666","4533E5","C119BA","BCBE2C","00
 my @pts = (6,9,4,7);
 my @mcolors = ("000044","7777BB");
 my $maxlogp = $ymax;
+my @cumszchrsMb = @{$cumszchrsMbForBuild{$buildver}};
+my @szchrs = @{$szchrsForBuild{$buildver}};
+my @chrs = @{$chrsForBuild{$buildver}};
+my %ichrs = %{$ichrsForBuild{$buildver}};
+
 
 while(<IN>) {
     print STDERR "epacts-plot: Processing $. lines..\n" if ( $. % 100000 == 0 );
@@ -177,10 +182,6 @@ while(<IN>) {
     my $logp = 0-log($pval+1e-30)/$logten;
     $maxlogp = $logp if ( $maxlogp < $logp );
     my $nchr = &schr2nchr($chr);
-    my @cumszchrsMb = @{$cumszchrsMbForBuild{$buildver}}
-    my @chrs = @{$chrsForBuild{$buildver}}
-    my %ichrs = %{$ichrsForBuild{$buildver}}
-
     #die "@cumszchrsMb\n";
 
     my $xbin = ($chrom) ? sprintf("%.1lf",$cumszchrsMb[$nchr-1]+$pos/1e6) : (sprintf("%d",($cumszchrsMb[$nchr-1]+$pos/1e6)/3)*3);
@@ -298,7 +299,7 @@ print CMD "set ytics 0,1 nomirror out font 'GillSansMT,18'\n";
 print CMD "set grid mx y\n";
 
 if ( $chrom ) {
-    $chrom =~ s/$prefixForBuild{$buildver}/;
+    $chrom =~ s/^$prefixForBuild{$buildver}//;
     print CMD "set xtics nomirror out font 'GillSansMT,18'\n";
     print CMD "set xlabel 'Base Position in Chromosome $chrom (Mb)' font 'GillSansMT,24'\n";
     print CMD "set xrange [0:".($szchrs[$ichrs{$chrom}]/1e6)."]\n";
