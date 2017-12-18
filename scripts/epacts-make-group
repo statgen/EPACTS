@@ -6,7 +6,7 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs @cumszchrsMb parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrs readPedVcf $binR $binRscript $binrm $binmake $binzcat $binmv $bincut $bingrep);
+use epacts qw( parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex readPedVcf $binR $binRscript $binrm $binmake $binzcat $binmv $bincut $bingrep);
 
 my $vcf = "";
 my $out = "";
