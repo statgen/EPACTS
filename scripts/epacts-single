@@ -368,7 +368,7 @@ for(my $i=0; $i < @chrs; ++$i) {
 	    if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
 	    $cmd = "\t$cmd\n";
 	    if ( $anno ) {
-		$cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts --ref $ref\n";
+		$cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts --buildver $buildver --ref $ref\n";
 	    }
 	    push(@tgts,$tgt);
 	    push(@cmds,$cmd);
@@ -384,7 +384,7 @@ print MAK "\t$epactsdir/bin/epacts-cat @tgts | $epactsdir/bin/bgzip -c > $out.ep
 print MAK "\t$epactsdir/bin/tabix -f -pbed $out.epacts.gz\n";
 print MAK "\t$binrm -f @tgts\n";
 unless ( $noplot ) {
-    print MAK "\t$epactsdir/bin/epacts-plot --in $out.epacts.gz".(($chr) ? " --region $chr:0" : "")."\n";
+    print MAK "\t$epactsdir/bin/epacts-plot --buildver ${buildver} --in $out.epacts.gz".(($chr) ? " --region $chr:0" : "")."\n";
 }
 if ( $topzoom > 0 ) {
     print MAK "\t$epactsdir/bin/epacts-zoom --vcf $vcf --prefix $out --top $topzoom ".($sepchr ? " --sepchr" : "")."\n";
