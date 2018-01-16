@@ -331,7 +331,10 @@ class pFile {
 	  std::string newchr = reg.substr(0,reg.find(':'));
 	  if ( idot == std::string::npos ) 
 	    error("Cannot find '.','_','-', or '/' after chr in the filename with --sepchr option");
-	  newfname += (fname.substr(pos,ichr-pos) + "chr" + newchr);
+	  if ( newchr.compare(0,3,"chr") == 0 )
+	    newfname += (fname.substr(pos,ichr-pos) + newchr);	    
+	  else
+	    newfname += (fname.substr(pos,ichr-pos) + "chr" + newchr);
 	  pos = idot;
 	}
 	newfname += fname.substr(pos);
