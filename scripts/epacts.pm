@@ -3,6 +3,7 @@ package epacts;
 use base qw/Exporter/;
 use lib "$FindBin::Bin";
 use File::Basename;
+use Data::Dumper;
 
 ## Variables and methods shared across the package
 @EXPORT_OK = qw(%chrsForBuild %szchrsForBuild %cumszchrsMbForBuild %complexForBuild %prefixForBuild parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrsForBuild readPedVcf readPedVcfMulti readPedKinLabel $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binawk $binpfbtops $bingnuplot $binepstopdf $binsort %defaultfastaForBuild installPackages tofpos fromfpos forkExecWait);
@@ -44,15 +45,18 @@ BEGIN {
     %cumszchrsMbForBuild = ();
 
     foreach my $build ("hg19","hg38") {
-        %ichrs = ();
-        @cumszchrsMb = (0);
+        my @chrs = @{$chrsForBuild{$build}};
+        my @szchrs = @{$szchrsForBuild{$build}};
+        my %ichrs = ();
+        my @cumszchrsMb = (0);
         for(my $i=0; $i < @chrs; ++$i) {
             push(@cumszchrsMb,$szchrs[$i]/1e6+$cumszchrsMb[$i]);
             $ichrs{$chrs[$i]} = $i;
         }
         $ichrsForBuild{$build} = {%ichrs};
         $cumszchrsMbForBuild{$build} = [@cumszchrsMb]; 
-    }
+   }
+
   %complexForBuild = (
       hg19 => [["5",44000001,52000000],["6",24000001,36000000],["8",8000001,12000000],["11",42000001,58000000],["17",40000001,43000000]],
       hg38 => [["chr5",43999899,46405538], ["chr5",50109817,52704166], 
