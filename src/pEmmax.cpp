@@ -242,6 +242,7 @@ int runMergeKin(int argc, char** argv) {
 
   // read multiple kinship files
   for(int i=0; i < (int)arg.kinfs.size(); ++i) {
+    notice("Merging kinship file %s..", arg.kinfs[i].c_str());
     if ( pFile::fileType(arg.kinfs[i].c_str()) < 0 ) {
       warning("Kinship file %s does NOT exist. Skipping...",arg.kinfs[i].c_str());
       continue;
