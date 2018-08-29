@@ -423,8 +423,8 @@ public:
     int keyIdx = 0;
     int i, j, k, l;
     int lKey = (int)key.size();
-    int AN = atoi(anno.prop("AN").c_str()) + 3;
-    float AC = atoi(anno.prop("AC").c_str()) + 3;
+    int AN = atoi(anno.prop("AN").c_str());
+    float AC = atoi(anno.prop("AC").c_str());
     float sqAC = 0.0;
     if (AN == 0) {
       error("AN is not observed in INFO field in site only VCF");
