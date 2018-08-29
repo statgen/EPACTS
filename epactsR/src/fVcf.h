@@ -423,18 +423,20 @@ public:
     int keyIdx = 0;
     int i, j, k, l;
     int lKey = (int)key.size();
-    int AN = atoi(anno.prop("AN").c_str());
-    float AC = atoi(anno.prop("AC").c_str());
-    float sqAC = 0.0;
-    if (AN == 0) {
-      error("AN is not observed in INFO field in site only VCF");
-    }
-    else {
-      double af = (double)AC/(double)AN;
-      sqAC = floor(2*AN*af*(1.+af)+.5); // assumes HWE sqAC = p^2 * 4 + 2p(1-p) = 2p(1+p)
-    }
+    int AN = 0; //atoi(anno.prop("AN").c_str());
+    float AC = 0.f; //atoi(anno.prop("AC").c_str());
+    float sqAC = 0.f;
+    
+    //if (AN == 0) {
+    //  error("AN is not observed in INFO field in site only VCF");
+    //}
+    //else {
+    //  double af = (double)AC/(double)AN;
+    //  sqAC = floor(2*AN*af*(1.+af)+.5); // assumes HWE sqAC = p^2 * 4 + 2p(1-p) = 2p(1+p)
+    //}
 
-    j = loadGenos(temp_genos);
+    j = loadGenos(temp_genos, AC, sqAC);
+    AN = j * 2;
 
     if ( (nInds == 0) && icols.empty() && ((int)genos.size() == j) ) nInds = j;
 
@@ -472,7 +474,7 @@ public:
         }
         if ( gpFlag ) { GPs.push_back(p0); GPs.push_back(p1); GPs.push_back(p2); }
 
-        AN += 2;
+        //AN += 2;
         AC += genos.back();
         sqAC += genos.back()*genos.back();
       }
@@ -1290,7 +1292,7 @@ public:
     return( 2*(llk1 - llk0) );
   }
 private:
-  std::size_t loadGenos(const std::vector<float>& g)
+  std::size_t loadGenos(const std::vector<float>& g, float& AC, float& sqAC)
   {
     genos.reserve(genos.size() + g.size());
 
@@ -1304,6 +1306,9 @@ private:
         {
           genos.push_back(*it);
           phases.push_back(0);
+
+	  AC += (*it);
+	  sqAC += (*it) * (*it);
         }
         else if (key == "GL")
         {
@@ -1321,6 +1326,9 @@ private:
         {
           genos.push_back(*it);
           phases.push_back(0);
+
+          AC += (*it);
+          sqAC += (*it) * (*it);
         }
         ++j;
       }
