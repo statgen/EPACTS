@@ -60,7 +60,7 @@ extern "C" {
 	error("Error in parsing marker ID %s",prname);
       for(j=0; j < nc; ++j) {
 	e = p_m[i+j*nr];
-	if ( isnan(e) ) {
+	if ( std::isnan(e) ) {
 	  fprintf(fp,"\tNA");
 	}
 	else {
@@ -125,7 +125,7 @@ extern "C" {
       }
       for(j=0; j < nvc; ++j) {
 	e = p_v[i+j*nvr];
-	if ( isnan(e) ) {
+	if ( std::isnan(e) ) {
 	  fprintf(fp,"\tNA");
 	}
 	else {
@@ -204,7 +204,7 @@ extern "C" {
       p_r[i] = mkChar(vcf.markers[i].c_str());
       for(int j=0; j < vcf.nInds; ++j) {
 	f = vcf.genos[i*vcf.nInds+j];
-	if ( isnan(f) ) REAL(genos)[i + vcf.nMarkers*j] = NA_REAL;
+	if ( std::isnan(f) ) REAL(genos)[i + vcf.nMarkers*j] = NA_REAL;
 	else REAL(genos)[i + vcf.nMarkers*j] = (double)f;
       }
     }
@@ -285,7 +285,7 @@ extern "C" {
       p_r[i] = mkChar(vcf.markers[i].c_str());
       for(int j=0; j < vcf.nInds; ++j) {
 	f = vcf.genos[i*vcf.nInds+j];
-	if ( isnan(f) ) REAL(genos)[i + vcf.nMarkers*j] = NA_REAL;
+	if ( std::isnan(f) ) REAL(genos)[i + vcf.nMarkers*j] = NA_REAL;
 	else REAL(genos)[i + vcf.nMarkers*j] = (double)f;
       }
     }

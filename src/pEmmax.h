@@ -651,7 +651,7 @@ public:
   }
   
   static double tcdf(double t, double nu) {
-    if ( isnan(t) ) return 1.;
+    if ( std::isnan(t) ) return 1.;
     else return betai(nu/2.,0.5,nu/(nu+t*t));
   }
 };
@@ -991,7 +991,7 @@ class pEmmax {
 	
 	for(int i=0; i < r; ++i) {
 	  for(int j=0; j < c; ++j) {
-	    if ( !isnan(X(i,j)) ) {
+	    if ( !std::isnan(X(i,j)) ) {
 	      ++colCnts[j];
 	      colSums[j] += X(i,j);
 	    }
@@ -1000,7 +1000,7 @@ class pEmmax {
 	
 	for(int i=0; i < r; ++i) {
 	  for(int j=0; j < c; ++j) {
-	    if ( isnan(X(i,j)) ) {
+	    if ( std::isnan(X(i,j)) ) {
 	      X(i,j) = (colCnts[j] > 0) ? (colSums[j]/colCnts[j]) : 0;
 	    }
 	  }
@@ -1350,7 +1350,7 @@ class pEmmaxMulti {
 	
 	for(int i=0; i < r; ++i) {
 	  for(int j=0; j < c; ++j) {
-	    if ( !isnan(X(i,j)) ) {
+	    if ( !std::isnan(X(i,j)) ) {
 	      ++colCnts[j];
 	      colSums[j] += X(i,j);
 	    }
@@ -1359,7 +1359,7 @@ class pEmmaxMulti {
 	
 	for(int i=0; i < r; ++i) {
 	  for(int j=0; j < c; ++j) {
-	    if ( isnan(X(i,j)) ) {
+	    if ( std::isnan(X(i,j)) ) {
 	      X(i,j) = (colCnts[j] > 0) ? (colSums[j]/colCnts[j]) : 0;
 	    }
 	  }

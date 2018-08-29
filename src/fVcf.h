@@ -23,7 +23,7 @@
 
 class fVcf {
 private:
-  savvy::indexed_reader<1> reader_;
+  savvy::indexed_reader reader_;
 
   static savvy::region string_to_region(const std::string& region_string)
   {
@@ -164,12 +164,12 @@ public:
     passOnly = pass;
     hardGenotype = ( key == "GT" ? true : false);
 
-    savvy::fmt data_format = savvy::fmt::genotype;
-    if (key == "PL") data_format = savvy::fmt::phred_scaled_genotype_likelihood;
-    else if (key == "GL") data_format = savvy::fmt::genotype_likelihood;
-    else if (key == "DS" || key == "EC") data_format = savvy::fmt::dosage;
+    savvy::fmt data_format = savvy::fmt::ac;
+    if (key == "PL") data_format = savvy::fmt::pl;
+    else if (key == "GL") data_format = savvy::fmt::gl;
+    else if (key == "DS" || key == "EC") data_format = savvy::fmt::ds;
 
-    reader_ = savvy::indexed_reader<1>(vcf, region, data_format);
+    reader_ = savvy::indexed_reader(vcf, region, data_format);
 
     if ( key == "GL" ) {
       glFlag = true;
@@ -206,7 +206,7 @@ public:
 
   void load(const char* vcf, const char* region, const char* _key, const char* rule, bool pass, std::set<std::string>& idset) {
     init(vcf, string_to_region(region), _key, rule, pass);
-    nInds = parseInds(reader_.samples_begin(), reader_.samples_end(), idset);
+    nInds = parseInds(reader_.samples().begin(), reader_.samples().end(), idset);
     // TODO: get headers if needed. headers.push_back(line);
 
     if ( ( idset.size() > 0 ) && ( idset.size() != icols.size() ) ) {
@@ -216,7 +216,7 @@ public:
 
   void load(const char* vcf, const char* region, const char* _key, const char* rule, bool pass, std::vector<int>& subcols) {
     init(vcf, string_to_region(region), _key, rule, pass);
-    nInds = parseInds(reader_.samples_begin(), reader_.samples_end(), subcols);
+    nInds = parseInds(reader_.samples().begin(), reader_.samples().end(), subcols);
 
     if ( ( subcols.size() > 0 ) && ( (int)subcols.size() != nInds ) ) {
       warning("Identified %d individuals from index file, and nInds = %d",(int)subcols.size(),nInds);
@@ -301,7 +301,7 @@ public:
       int cnts[3] = {0,0,0};
       for(int j=0; j < nInds; ++j) {
         g = genos[(size_t)m*(size_t)nInds + j];
-        if ( !isnan(g) ) { // do not count missing at any place
+        if ( !std::isnan(g) ) { // do not count missing at any place
           if ( g < 0.5 ) ++cnts[0];
           else if ( g >= 1.5 ) ++cnts[2];
           else ++cnts[1];
@@ -330,7 +330,7 @@ public:
       cnts[0] = cnts[1] = cnts[2] = 0;
       for(int j=0; j < nInds; ++j) {
         g = genos[(size_t)m*(size_t)nInds + j];
-        if ( !isnan(g) ) { // do not count missing at any place
+        if ( !std::isnan(g) ) { // do not count missing at any place
           if ( g < 0.5 ) ++cnts[0];
           else if ( g >= 1.5 ) ++cnts[2];
           else ++cnts[1];
@@ -344,7 +344,7 @@ public:
     cnts[0] = cnts[1] = cnts[2] = cnts[3] = cnts[4] = cnts[5] = 0;
     for(int j=0; j < nInds; ++j) {
       g = genos[(size_t)m*(size_t)nInds + j];
-      if ( !isnan(g) ) { // do not count missing at any place
+      if ( !std::isnan(g) ) { // do not count missing at any place
         if ( g < 0.5 ) ++cnts[0+isCases[j]*3];
         else if ( g >= 1.5 ) ++cnts[2+isCases[j]*3];
         else ++cnts[1+isCases[j]*3];
@@ -389,7 +389,7 @@ public:
       fprintf(fp, "%s", markers[i].c_str());
       for(int j=0; j < nInds; ++j) {
         v = genos[(size_t)i*(size_t)nInds + j];
-        if ( isnan(v) ) {
+        if ( std::isnan(v) ) {
           fprintf(fp,"\tNA");
         }
         else {
