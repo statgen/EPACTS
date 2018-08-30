@@ -169,6 +169,7 @@ public:
     else if (key == "GL") data_format = savvy::fmt::gl;
     else if (key == "DS" || key == "EC") data_format = savvy::fmt::ds;
 
+    //std::cerr << "REGION: " << region.chromosome() << ":" << region.from() << "-" << region.to() << std::endl;
     reader_ = savvy::indexed_reader(vcf, region, data_format);
 
     if ( key == "GL" ) {
@@ -1099,9 +1100,10 @@ public:
     std::vector<float> temp_genos;
 
     if ( del ) clear();
+    genos.reserve(m * nInds);
 
     int mStart = nMarkers;
-
+    time_t start_time = time(nullptr);
     //parseInds(reader_.samples_begin(), reader_.samples_end(), icols);
     //fprintf(stderr,"fVcf::readMarkers(%d) called",m);
     while (reader_.read(anno, temp_genos)) {
@@ -1116,6 +1118,7 @@ public:
         if ( ( m > 0 ) && ( m <= nMarkers - mStart ) ) break;
       }
     }
+    notice("Reading VCF took %d seconds", time(nullptr) - start_time);
     //notice("Returning %d",nMarkers-mStart);
     return ( nMarkers-mStart );
   }
