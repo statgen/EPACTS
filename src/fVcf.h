@@ -436,8 +436,7 @@ public:
     //  sqAC = floor(2*AN*af*(1.+af)+.5); // assumes HWE sqAC = p^2 * 4 + 2p(1-p) = 2p(1+p)
     //}
 
-    j = loadGenos(temp_genos, AC, sqAC);
-    AN = j * 2;
+    j = loadGenos(temp_genos, AC, sqAC, AN);
 
     if ( (nInds == 0) && icols.empty() && ((int)genos.size() == j) ) nInds = j;
 
@@ -1295,7 +1294,7 @@ public:
     return( 2*(llk1 - llk0) );
   }
 private:
-  std::size_t loadGenos(const std::vector<float>& g, float& AC, float& sqAC)
+  std::size_t loadGenos(const std::vector<float>& g, float& AC, float& sqAC, int& AN)
   {
     genos.reserve(genos.size() + g.size());
 
@@ -1305,33 +1304,30 @@ private:
     {
       if (icols.empty() || (j < icols.size() && icols[j] == i))
       {
-        if (key == "DS")
+        if (key == "GT" || key == "DS")
         {
-          genos.push_back(*it);
+          float f = (*it);
+          genos.push_back(f);
           phases.push_back(0);
 
-	  AC += (*it);
-	  sqAC += (*it) * (*it);
+          if (!std::isnan(f))
+          {
+            AC += f;
+            sqAC += f * f;
+            AN += 2;
+          }
         }
         else if (key == "GL")
         {
           if ( *it < -25.5 ) PLs.push_back(255);
           else PLs.push_back((std::uint8_t)(-10 * (*it) + 0.5));
         }
-        else if (key == "PL")
+        else //if (key == "PL")
         {
           int pl = (int)(*it);
           if (pl > 255)
             pl = 255;
           PLs.push_back((std::uint8_t) pl);
-        }
-        else // GT
-        {
-          genos.push_back(*it);
-          phases.push_back(0);
-
-          AC += (*it);
-          sqAC += (*it) * (*it);
         }
         ++j;
       }
