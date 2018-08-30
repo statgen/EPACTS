@@ -208,30 +208,38 @@ public:
     tf.read(&fl,sizeof(int)); flag = fl;
     tf.read(&ws,sizeof(double)); wsum = ws;
     size_t size = (size_t)n * ( (size_t)n + 1 ) / 2;
-    double* p = new double[size];
+    //double* p = new double[size];
+    double* p = new double[n];
 
-    notice("Allocating size %zu bytes.. \n", size * sizeof(double));
+    notice("Allocating size %zu bytes.. \n", n * sizeof(double));    
+
+    //notice("Allocating size %zu bytes.. \n", size * sizeof(double));
 	   
-    size_t nr = tf.read(p, sizeof(double)*size);
+    //size_t nr = tf.read(p, sizeof(double)*size);
     int i, j;
     size_t k;
     
-    if ( nr != sizeof(double)*size ) error("Kinship matrix size is truncated");
+    //if ( nr != sizeof(double)*size ) error("Kinship matrix size is truncated");
     K.resize(n,n);
     for(i=0, k=0; i < n; ++i) {
+      // read (i+1) byte at a fime
+      size_t nr = tf.read(p, sizeof(double)*(i+1));
+      if ( nr != sizeof(double)*(i+1) ) error("Kinship matrix size is truncated at i=%d", i);
       for(j=0; j <= i; ++j, ++k) {
 	if ( i == j ) {
-	  K(i,j) = p[k];
+	  //K(i,j) = p[k];
+	  K(i,j) = p[j];	  
 	}
 	else {
-	  K(i,j) = K(j,i) = p[k];
+	  //K(i,j) = K(j,i) = p[k];
+	  K(i,j) = K(j,i) = p[j];  
 	}
       }
     }
     delete[] p;
 
     readIDs(tf, n, ids);
-    return true;
+    return true;    
   }
 
   static bool readTxtKinWithIDs(const char* inname, MatrixXd& K, int& flag, double& wsum, std::vector<std::string>& ids) {
