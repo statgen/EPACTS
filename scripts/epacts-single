@@ -363,7 +363,7 @@ for(my $i=0; $i < @chrs; ++$i) {
 	    $cmd = "$epactsdir/bin/pEmmax GLRT --vcf $cvcf --phenof $pheno --indf $ind --region $region --out $op.epacts --field $field --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC ".($pass ? "" : "--ignoreFilter");
 	}
 	elsif ( $test eq "q.emmax" ) {
-	    $cmd = "$epactsdir/bin/pEmmax assoc --vcf $cvcf --region $region --phenof $pheno --field $field --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC".($pass ? "" : "--ignoreFilter");
+	    $cmd = "$epactsdir/bin/pEmmax assoc --vcf $cvcf --region $region --phenof $pheno --field $field --indf $ind --eigf $eigf --remlf $remlf --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC ".($pass ? "" : "--ignoreFilter");
 	}
 	else {
 	    die "ERROR: Cannot find $datadir/single.$test.R\n" unless ( -s "$datadir/single.$test.R" );
