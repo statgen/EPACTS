@@ -474,7 +474,7 @@ public:
         }
         if ( gpFlag ) { GPs.push_back(p0); GPs.push_back(p1); GPs.push_back(p2); }
 
-        //AN += 2;
+        AN += 2;
         AC += genos.back();
         sqAC += genos.back()*genos.back();
       }
