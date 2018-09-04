@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.2)
 project(epacts)
 add_definitions(-DEPACTS_VERSION=1.0.0)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 11)
 
 find_package(ZLIB REQUIRED)
 find_library(HTS_LIBRARY hts)
