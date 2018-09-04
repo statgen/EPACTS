@@ -27,6 +27,8 @@ private:
 
   static savvy::region string_to_region(const std::string& region_string)
   {
+    if (region_string.empty())
+      return savvy::region("");
     std::string chrom;
     std::uint32_t start = 0;
     std::uint32_t end = 0xFFFFFFFF;
@@ -206,7 +208,7 @@ public:
   }
 
   void load(const char* vcf, const char* region, const char* _key, const char* rule, bool pass, std::set<std::string>& idset) {
-    init(vcf, string_to_region(region), _key, rule, pass);
+    init(vcf, string_to_region(region ? region : ""), _key, rule, pass);
     nInds = parseInds(reader_.samples().begin(), reader_.samples().end(), idset);
     // TODO: get headers if needed. headers.push_back(line);
 
@@ -216,7 +218,7 @@ public:
   }
 
   void load(const char* vcf, const char* region, const char* _key, const char* rule, bool pass, std::vector<int>& subcols) {
-    init(vcf, string_to_region(region), _key, rule, pass);
+    init(vcf, string_to_region(region ? region : ""), _key, rule, pass);
     nInds = parseInds(reader_.samples().begin(), reader_.samples().end(), subcols);
 
     if ( ( subcols.size() > 0 ) && ( (int)subcols.size() != nInds ) ) {
@@ -415,7 +417,7 @@ public:
     std::string markerKey = chrom+":"+pos+"_"+ref+"/"+alt;
     if ( ! markerSet.empty() ) {
       if ( markerSet.find(markerKey) == markerSet.end() ) {
-        std::cerr << "markerSet size:" << markerSet.size() << std::endl;
+        //std::cerr << "markerSet size:" << markerSet.size() << std::endl;
         return -1;
       }
     }
@@ -1015,7 +1017,7 @@ public:
   int readMarkerGroup(const char** pMarkers, int nMarkers, int startIndex = 0, bool sepchr = false) {
     std::vector<std::string> markerIDs;
     for(int i=0; i < nMarkers; ++i) {
-      markerIDs.push_back(pMarkers[i]);
+      markerIDs.push_back(pMarkers[i] ? pMarkers[i] : "");
     }
     return readMarkerGroup(markerIDs,startIndex,sepchr);
   }
@@ -1089,7 +1091,7 @@ public:
 
   bool updateRegion(const char* region)
   {
-    reader_.reset_region(string_to_region(region));
+    reader_.reset_region(string_to_region(region ? region : ""));
     return reader_.good();
   }
 
