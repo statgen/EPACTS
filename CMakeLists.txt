@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD 11)
 find_package(ZLIB REQUIRED)
 find_library(HTS_LIBRARY hts)
 find_package(savvy REQUIRED)
+#find_package(Eigen3 REQUIRED)
 find_package(Threads)
 
 #add_custom_target(epactsR ALL COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} data/epactsR_3.3.2.tar.gz WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} COMMENT "Builing epactsR ...")
@@ -42,6 +43,7 @@ target_link_libraries(libtabix ${ZLIB_LIBRARIES} ${HTS_LIBRARY} ${CMAKE_THREAD_L
 add_executable(pEmmax src/pEmmax.cpp src/Parameters.cpp src/Error.cpp src/PhredHelper.cpp src/codonHelper.cpp src/fVcf.h)
 target_link_libraries(pEmmax libtabix savvy)
 target_include_directories(pEmmax PRIVATE ${CMAKE_SOURCE_DIR}/src)
+#target_include_directories(pEmmax PRIVATE ${CMAKE_SOURCE_DIR}/src ${EIGEN3_INCLUDE_DIR})
 
 add_executable(vcfast src/vcfast.cpp src/Error.cpp src/PhredHelper.cpp src/Parameters.cpp src/codonHelper.cpp src/genomePosition.cpp)
 target_link_libraries(vcfast libtabix savvy)

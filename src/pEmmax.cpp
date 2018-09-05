@@ -1186,7 +1186,8 @@ int runSimul(int argc, char** argv) {
       r1[i] = sqrt(-2.0*log(x1)) * cos(M_PI * 2 * x2);
       r2[i] = sqrt(-2.0*log(x1)) * sin(M_PI * 2 * x2);
     }
-    Y.col(j) = sqrt(arg.h2) * (lt.matrixL() * r1) + sqrt(1.-arg.h2) * r2;
+    //Y.col(j) = sqrt(arg.h2) * (lt.matrixL() * r1) + sqrt(1.-arg.h2) * r2;
+    Y.col(j) = (lt.matrixL() * r1) * sqrt(arg.h2) + sqrt(1.-arg.h2) * r2;
     if ( arg.binary  ) {
       for(int i=0; i < n; ++i) {
 	v.push_back(Y(i,j));
