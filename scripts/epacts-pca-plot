@@ -120,7 +120,7 @@ if ( $writePed ) {
     }
     close EVECS;
 
-    open(OUT,">out.ped") || die "Cannot open $out.ped for writing\n";
+    open(OUT,">$out.ped") || die "Cannot open $out.ped for writing\n";
     while(<IN>) {
 	if ( /^#/ ) {
 	    chomp;
@@ -138,7 +138,7 @@ if ( $writePed ) {
 
 	    print OUT $_;
 	    print OUT "\t";
-	    print OUT join("\t",$hevecs{$id});
+	    print OUT join("\t",@{$hevecs{$id}});
 	    print OUT "\n";
 	}
     }
