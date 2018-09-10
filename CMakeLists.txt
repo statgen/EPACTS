@@ -60,6 +60,9 @@ target_link_libraries(bgzip ${ZLIB_LIBRARIES} ${HTS_LIBRARY} ${CMAKE_THREAD_LIBS
 add_executable(tabix src/tabix.c src/bedidx.c src/knetfile.c src/kstring.c src/index.c)
 target_link_libraries(tabix ${ZLIB_LIBRARIES} ${HTS_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
 
+add_executable(parse-sample-ids src/parse_sample_ids.cpp)
+target_link_libraries(parse-sample-ids savvy)
+
 file(GLOB_RECURSE EPACTS_PERL_SCRIPTS "scripts/ep*" "scripts/wGetOptions.pm")
 file(GLOB_RECURSE EPACTS_R_SCRIPTS "data/*.R")
 file(GLOB_RECURSE EPACTS_DATA_FILES "data/*")
@@ -68,6 +71,6 @@ install(FILES ${EPACTS_PERL_SCRIPTS}
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
         DESTINATION bin)
 install(FILES ${EPACTS_DATA_FILES} DESTINATION share/EPACTS)
-install(TARGETS pEmmax vcfast chaps anno bgzip tabix RUNTIME DESTINATION bin)
+install(TARGETS pEmmax vcfast chaps anno bgzip tabix parse-sample-ids RUNTIME DESTINATION bin)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/epactsR DESTINATION lib) #install(DIRECTORY ${CMAKE_BINARY_DIR}/epactsR DESTINATION lib)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/mmSKAT DESTINATION lib) #install(DIRECTORY ${CMAKE_BINARY_DIR}/mmSKAT DESTINATION lib)
