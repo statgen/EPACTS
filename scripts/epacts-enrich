@@ -82,7 +82,7 @@ unless ( ( $prefix ) && ( $vcf ) && ( $bedf ) ) {
     pod2usage(2);
 }
 
-unless ( ( -s $vcf ) && ( -s "$vcf.tbi" ) ) { print STDERR "Cannot read $vcf and $vcf.tbi\n"; }
+unless ( ( -s $vcf ) && ( -s "$vcf.tbi" || -s "$vcf.csi" || -s "$vcf.s1r" ) ) { print STDERR "Cannot read $vcf and $vcf.tbi\n"; }
 
 unless ( ( -s $bedf ) && ( -s "$bedf.tbi" ) ) { print STDERR "Cannot read $bedf and $bedf.tbi\n"; }
 
