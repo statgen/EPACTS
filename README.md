@@ -10,8 +10,10 @@ You can clone the current snapshot of this repository to install as well
 
 <pre>
 $ git clone https://github.com/statgen/EPACTS.git
-$ cd EPACTS
-$ ./configure --prefix [/path/to/install]
+$ mkdir EPACTS/build
+$ cd EPACTS/build
+$ cget install -f ../requirements.txt
+$ cmake -DCMAKE_PREFIX_PATH=</path/to/install> -DCMAKE_TOOCHAIN_FILE=cget/cget/cget.cmake -DCMAKE_BUILD_TYPE=Release ..
 $ make
 $ make install
 </pre>
