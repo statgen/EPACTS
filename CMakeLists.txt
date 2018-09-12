@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.2)
-project(epacts)
-add_definitions(-DEPACTS_VERSION=1.0.0)
+project(epacts VERSION 1.0.0)
+include(CMakePackageConfigHelpers)
+
+add_definitions(-DEPACTS_VERSION="${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 11)
+
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a;${CMAKE_FIND_LIBRARY_SUFFIXES}") # Prefer libz.a when both are available
 
 find_package(ZLIB REQUIRED)
 find_library(HTS_LIBRARY hts)
@@ -38,7 +42,7 @@ add_custom_target(mmSKAT-install
 
 add_library(libtabix src/bedidx.c src/knetfile.c src/index.c)
 set_target_properties(libtabix PROPERTIES PREFIX "")
-target_link_libraries(libtabix ${ZLIB_LIBRARIES} ${HTS_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(libtabix ${HTS_LIBRARY} ${ZLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(pEmmax src/pEmmax.cpp src/Parameters.cpp src/Error.cpp src/PhredHelper.cpp src/codonHelper.cpp src/fVcf.h)
 target_link_libraries(pEmmax libtabix savvy)
@@ -55,10 +59,10 @@ add_executable(anno src/Anno.cpp src/IO.cpp)
 target_link_libraries(anno libtabix)
 
 add_executable(bgzip src/bgzip.c src/bedidx.c src/knetfile.c src/kstring.c)
-target_link_libraries(bgzip ${ZLIB_LIBRARIES} ${HTS_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(bgzip ${HTS_LIBRARY} ${ZLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(tabix src/tabix.c src/bedidx.c src/knetfile.c src/kstring.c src/index.c)
-target_link_libraries(tabix ${ZLIB_LIBRARIES} ${HTS_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(tabix ${HTS_LIBRARY} ${ZLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(parse-sample-ids src/parse_sample_ids.cpp)
 target_link_libraries(parse-sample-ids savvy)
@@ -74,3 +78,8 @@ install(FILES ${EPACTS_DATA_FILES} DESTINATION share/EPACTS)
 install(TARGETS pEmmax vcfast chaps anno bgzip tabix parse-sample-ids RUNTIME DESTINATION bin)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/epactsR DESTINATION lib) #install(DIRECTORY ${CMAKE_BINARY_DIR}/epactsR DESTINATION lib)
 install(DIRECTORY ${CMAKE_BINARY_DIR}/mmSKAT DESTINATION lib) #install(DIRECTORY ${CMAKE_BINARY_DIR}/mmSKAT DESTINATION lib)
+
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+include(CPack)
