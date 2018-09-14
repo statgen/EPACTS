@@ -2,6 +2,14 @@ cmake_minimum_required(VERSION 3.2)
 project(epacts VERSION 1.0.0)
 include(CMakePackageConfigHelpers)
 
+foreach (PROG_TO_CHECK perl gs Rscript R grep mv rm make cat cut dirname head mkdir sort zcat groff pfbtops gnuplot)
+    find_program(${PROG_TO_CHECK}_EXE ${PROG_TO_CHECK})
+    if(NOT ${PROG_TO_CHECK}_EXE)
+        message(FATAL_ERROR "${PROG_TO_CHECK} not found!")
+    endif()
+    message(STATUS "Found ${PROG_TO_CHECK}")
+endforeach()
+
 add_definitions(-DEPACTS_VERSION="${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 11)
