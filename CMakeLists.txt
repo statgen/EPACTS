@@ -33,7 +33,7 @@ add_custom_target(epactsR-install
                   ALL
                   DEPENDS epactsR-build
                   #${CMAKE_COMMAND} -E env CPLUS_INCLUDE_PATH=${CMAKE_SOURCE_DIR}/cget/include LIBRARY_PATH=${CMAKE_SOURCE_DIR}/cget/lib R CMD INSTALL -l ${CMAKE_BINARY_DIR} epactsR_3.3.3.tar.gz
-                  COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} --configure-vars='INCLUDE_DIR=${CMAKE_SOURCE_DIR}/cget/include LINK_DIR=${CMAKE_SOURCE_DIR}/cget/lib' epactsR_3.3.3.tar.gz
+                  COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} --configure-vars='INCLUDE_DIR=${CGET_PREFIX}/include LINK_DIR=${CGET_PREFIX}/lib' epactsR_3.3.3.tar.gz
                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                   COMMENT "Installing epactsR ...")
 
