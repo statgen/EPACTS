@@ -201,7 +201,7 @@ class pFile {
       */
     case 1:
       if ( line == NULL ) line = new char[MAX_LINE_SIZE];
-      if ( gzgets(gf, line, MAX_LINE_SIZE) > 0 ) {
+      if ( gzgets(gf, line, MAX_LINE_SIZE) ) {
 	len = strlen(line); // TODO : convert to lazy evaluation
 	if ( line[len-1] == '\n' ) {
 	  line[len-1] = '\0';
