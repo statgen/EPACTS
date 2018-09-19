@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.2)
 project(epacts VERSION 1.0.0)
 include(CMakePackageConfigHelpers)
-include(GNUInstallDirs)
 
 foreach (PROG_TO_CHECK cat cut dirname gnuplot grep groff gs head make mkdir mv perl pfbtops R rm Rscript sort zcat)
     find_program(${PROG_TO_CHECK}_EXE ${PROG_TO_CHECK})
@@ -34,7 +33,7 @@ add_custom_target(epactsR-install
                   ALL
                   DEPENDS epactsR-build
                   #${CMAKE_COMMAND} -E env CPLUS_INCLUDE_PATH=${CMAKE_SOURCE_DIR}/cget/include LIBRARY_PATH=${CMAKE_SOURCE_DIR}/cget/lib R CMD INSTALL -l ${CMAKE_BINARY_DIR} epactsR_3.3.3.tar.gz
-                  COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} --configure-vars='INCLUDE_DIR=${CGET_PREFIX}/include LINK_DIR=${CGET_PREFIX}/${CMAKE_INSTALL_LIBDIR} CPPFLAGS="${CMAKE_CXX_FLAGS}"' epactsR_3.3.3.tar.gz
+                  COMMAND R CMD INSTALL -l ${CMAKE_BINARY_DIR} --configure-vars='INCLUDE_DIR=${CGET_PREFIX}/include LINK_DIR=${CGET_PREFIX}/lib CPPFLAGS="${CMAKE_CXX_FLAGS}"' epactsR_3.3.3.tar.gz
                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                   COMMENT "Installing epactsR ...")
 
