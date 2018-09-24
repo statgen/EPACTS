@@ -410,7 +410,7 @@ class AnnotationOutputFile{
 
 }; // class AnnotationOutputFile
 
-// run annotations (gene based, bed file, genomeScores, tabix database)
+// run annotations (gene based, bed file, genomeScore, tabix database)
 // and store results
 class AnnotationController{
  public:

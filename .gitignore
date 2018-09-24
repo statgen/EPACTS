@@ -28,6 +28,12 @@
 *.out
 *.app
 
+# Jetbrains and cget files
+.idea/
+cmake-build-debug/
+cmake-build-release/
+cget/
+
 ## automake delated
 autom4te.cache
 autom4te.cache/*

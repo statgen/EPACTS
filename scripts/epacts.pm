@@ -87,13 +87,13 @@ sub schr2nchr {
 sub vcfSampleIDs {
     my $vcf = shift;
     my @F = ();
-    if ( -s "$vcf.tbi" ) {
-	@F = split(/[\t\r\n]+/,`$epactsdir/bin/tabix -H $vcf | tail -1`);
+    if ( -s "$vcf.tbi" || -s "$vcf.csi" || -s "$vcf.s1r" ) {
+	@F = split(/[\t\r\n]+/,`$epactsdir/bin/parse-sample-ids $vcf`); #tabix -H $vcf | tail -1`);
     }
     else {
 	@F = split(/[\t\r\n]+/,`$binzcat $vcf | $binhead -1000 | $bingrep ^#CHROM`);
+        splice(@F,0,9);
     }
-    splice(@F,0,9);
     return @F;
 }
 
@@ -135,8 +135,8 @@ sub readPedVcf {
     my @covs = @{$rcovs};
     my @condsnps = @{$rcondsnps};
 
-    my @vcfIds = split(/[\s\t\r\n]+/,`$epactsdir/bin/tabix -H $vcf | tail -1`);
-    splice(@vcfIds,0,9);
+    my @vcfIds = split(/[\s\t\r\n]+/,`$epactsdir/bin/parse-sample-ids $vcf`); #tabix -H $vcf | tail -1`);
+    #splice(@vcfIds,0,9);
     for(my $i=0; $i < @vcfIds; ++$i) { $hVcfIds{$vcfIds[$i]} = $i; }
     
     my @datIds = ();
@@ -410,8 +410,8 @@ sub readPedVcfMulti {
 
     #print STDERR "foo $epactsdir\n";
 
-    my @vcfIds = split(/[\s\t\r\n]+/,`$epactsdir/bin/tabix -H $vcf | tail -1`);
-    splice(@vcfIds,0,9);
+    my @vcfIds = split(/[\s\t\r\n]+/,`$epactsdir/bin/parse-sample-ids $vcf`); #tabix -H $vcf | tail -1`);
+    #splice(@vcfIds,0,9);
     for(my $i=0; $i < @vcfIds; ++$i) { $hVcfIds{$vcfIds[$i]} = $i; }
 
     #print STDERR "bar\n";

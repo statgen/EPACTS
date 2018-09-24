@@ -28,9 +28,10 @@ public:
       }
       if (lineNo % 1000000l == 0) {
         fprintf(stderr, "\rFinished %s:%d ...", chrom, lineNo);
-      };
-    };
-  };
+      }
+    }
+    return lineNo;
+  }
   bool openChr(const char* chrom) {
     if ( fpmap.find(chrom) != fpmap.end() ) {
       // file pointer already exist. Do nothing
@@ -46,7 +47,7 @@ public:
       fpmap[chrom] = fp;
       return true;
     }
-  };
+  }
 public:
 GenomeScore(const char* _dir) : dir(_dir) {}
 

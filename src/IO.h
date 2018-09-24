@@ -14,7 +14,7 @@
 // cannot forward declare an typdef anonymous struct
 // http://stackoverflow.com/questions/804894/forward-declaration-of-a-typedef-in-c
 // so include the header file
-#include "bgzf.h"
+#include <htslib/bgzf.h>
 
 // #define IO_DEBUG
 

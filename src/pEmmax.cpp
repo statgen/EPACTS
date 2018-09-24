@@ -81,53 +81,53 @@ int runGenKin(int argc, char** argv) {
     M += emx.tvcf.nMarkers;
 
     notice("Processing %d markers across %d individuals...", M, emx.tvcf.nInds);
-    
-    for(i=0, m=0; i < emx.tvcf.nMarkers; ++i) {
-      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) && 
-	   ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
-	   ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
-	offset = i * emx.tvcf.nInds;
-	mu = emx.tvcf.alleleFreq(i)*2.;
-	sigma = sqrt(mu * (2. - mu) / 2.);
-	if ( arg.BN ) {
-	  for(j=0; j < emx.tvcf.nInds; ++j) {
-	    if ( isnanf(emx.tvcf.genos[j + offset]) ) {
-	      genos(j,m) = 0;
-	    }
-	    else {
-	      genos(j,m) = (emx.tvcf.genos[j + offset] - mu)/sigma;
-	    }
-	  }
 
-	  if ( arg.adjDiag ) {
-	    adjs(m) = (mu-1.)/sigma;
-	  }
-	}
-	else if ( arg.IBS ) {
-	  for(j=0; j < emx.tvcf.nInds; ++j) {
-	    if ( isnanf(emx.tvcf.genos[j + offset]) ) {
-	      genos(j,m) = (mu - 1);
-	    }
-	    else {
-	      genos(j,m) = (emx.tvcf.genos[j + offset] - 1.);
-	    }
-	  }
-	}
-	else {
-	  // not implemented yet
-	  error("Kinship option is only available for --BN or --IBS\n");
-	}
-	++m;
+    for(i=0, m=0; i < emx.tvcf.nMarkers; ++i) {
+      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) &&
+           ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
+           ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
+        offset = i * emx.tvcf.nInds;
+        mu = emx.tvcf.alleleFreq(i)*2.;
+        sigma = sqrt(mu * (2. - mu) / 2.);
+        if ( arg.BN ) {
+          for(j=0; j < emx.tvcf.nInds; ++j) {
+            if ( std::isnan(emx.tvcf.genos[j + offset]) ) {
+              genos(j,m) = 0;
+            }
+            else {
+              genos(j,m) = (emx.tvcf.genos[j + offset] - mu)/sigma;
+            }
+          }
+
+          if ( arg.adjDiag ) {
+            adjs(m) = (mu-1.)/sigma;
+          }
+        }
+        else if ( arg.IBS ) {
+          for(j=0; j < emx.tvcf.nInds; ++j) {
+            if ( std::isnan(emx.tvcf.genos[j + offset]) ) {
+              genos(j,m) = (mu - 1);
+            }
+            else {
+              genos(j,m) = (emx.tvcf.genos[j + offset] - 1.);
+            }
+          }
+        }
+        else {
+          // not implemented yet
+          error("Kinship option is only available for --BN or --IBS\n");
+        }
+        ++m;
       }
     }
 
     fprintf(stderr,"%d markers included\n",m);
-    
+
     if ( arg.BN ) {
       emx.wsumK += m;
       emx.K += ( genos.block(0,0,emx.tvcf.nInds,m) * genos.block(0,0,emx.tvcf.nInds,m).transpose() );
       if ( arg.adjDiag ) {
-	emx.K += MatrixXd(genos.block(0,0,emx.tvcf.nInds,m) * adjs.block(0,0,m,1)).asDiagonal();
+        emx.K += MatrixXd(genos.block(0,0,emx.tvcf.nInds,m) * adjs.block(0,0,m,1)).asDiagonal();
       }
     }
     else if ( arg.IBS ) {
@@ -139,7 +139,7 @@ int runGenKin(int argc, char** argv) {
   if ( arg.IBS ) {
     emx.K.array() += (emx.wsumK/2.);
   }
-  
+
   if ( arg.raw == false ) {
     emx.K *= (1./emx.wsumK);
     emx.wsumK = 1;
@@ -355,7 +355,6 @@ int runReml(int argc, char** argv) {
   return 0;
 }
 
-
 // y ~ X + Z + e
 // y(t) ~ Xt + Zt + et
 int runAssoc(int argc, char** argv) {
@@ -408,7 +407,7 @@ int runAssoc(int argc, char** argv) {
   const char* line = NULL;
   while( (line = treml.getLine()) != NULL ) {
     pFile::tokenizeLine(line," \t\r\n", tokens);
-    if ( tokens.size() != 2 ) 
+    if ( tokens.size() != 2 )
       error("Phenotype file must have two columns");
     delta = atof(tokens[1].c_str());
     notice("Reading delta = %lf",delta);
@@ -464,90 +463,90 @@ int runAssoc(int argc, char** argv) {
 
   for(int M=0; emx.tvcf.readMarkers(arg.unit); ) {
     M += emx.tvcf.nMarkers;
-    
+
     notice("Processing %d markers across %d individuals...", M, emx.tvcf.nInds);
     for(i=0, m=0; i < emx.tvcf.nMarkers; ++i) {
-      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) && 
-	   ( emx.tvcf.MAF(i) <= arg.maxMAF ) && 
-	   ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
-	   ( emx.tvcf.MAC(i) <= arg.maxMAC ) &&
-	   ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
-	   ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
-	//fprintf(stderr,"%d\n",i);
-	int offset = i * emx.tvcf.nInds;
-	mu = emx.tvcf.alleleFreq(i)*2.;
-	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( isnanf(emx.tvcf.genos[j + offset]) ) {
-	    x(j) = mu;
-	  }
-	  else {
-	    x(j) = emx.tvcf.genos[j + offset];
-	  }
-	}
+      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) &&
+           ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
+           ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
+           ( emx.tvcf.MAC(i) <= arg.maxMAC ) &&
+           ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
+           ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
+        //fprintf(stderr,"%d\n",i);
+        int offset = i * emx.tvcf.nInds;
+        mu = emx.tvcf.alleleFreq(i)*2.;
+        for(j=0; j < emx.tvcf.nInds; ++j) {
+          if ( std::isnan(emx.tvcf.genos[j + offset]) ) {
+            x(j) = mu;
+          }
+          else {
+            x(j) = emx.tvcf.genos[j + offset];
+          }
+        }
 
-    	xt = emx.T * x;
-	sx = sxx = sxy = 0;
-	//xy = xsum = xsq = 0;
-	for(j=0; j < c; ++j) {
-	  //xy += xt(j)*yt(j);
-	  //xsum += xt(j);
-	  //xsq += xt(j)*xt(j);
-	  sxy += (xt(j)*yt(j));
-	  sx += xt(j);
-	  sxx += (xt(j)*xt(j));
-	}
+        xt = emx.T * x;
+        sx = sxx = sxy = 0;
+        //xy = xsum = xsq = 0;
+        for(j=0; j < c; ++j) {
+          //xy += xt(j)*yt(j);
+          //xsum += xt(j);
+          //xsq += xt(j)*xt(j);
+          sxy += (xt(j)*yt(j));
+          sx += xt(j);
+          sxx += (xt(j)*xt(j));
+        }
 
-	// this is the estimates including the intercept always
-	
-	beta = ((c+1)*sxy-sx*sy)/((c+1)*sxx-sx*sx);
-	varE = 1/(c+1.)/(c-1.)*((c+1)*syy-sy*sy-beta*beta*((c+1)*sxx-sx*sx));
-	sebeta = sqrt((c+1)*varE/((c+1)*sxx-sx*sx));
-	r = ((c+1)*sxy-sx*sy)/sqrt(((c+1)*sxx-sx*sx)*((c+1)*syy-sy*sy));
-	t = r * sqrt((c-1)/(1-r*r+pEmmaxHelper::ZEPS));
-	pval = pEmmaxHelper::tcdf(t, c-1);
+        // this is the estimates including the intercept always
 
-	/*
-	beta = sxy/sxx;
-	sebeta = (syy*sxx-sxy*sxy)/(c*sxx*sxx);
-	r = sxy/sqrt(sxx*sxy);
-	t = r * sqrt((c-1)/(1-r*r+pEmmaxHelper::ZEPS));
-	pval = pEmmaxHelper::tcdf(t, c-1);
-	*/
+        beta = ((c+1)*sxy-sx*sy)/((c+1)*sxx-sx*sx);
+        varE = 1/(c+1.)/(c-1.)*((c+1)*syy-sy*sy-beta*beta*((c+1)*sxx-sx*sx));
+        sebeta = sqrt((c+1)*varE/((c+1)*sxx-sx*sx));
+        r = ((c+1)*sxy-sx*sy)/sqrt(((c+1)*sxx-sx*sx)*((c+1)*syy-sy*sy));
+        t = r * sqrt((c-1)/(1-r*r+pEmmaxHelper::ZEPS));
+        pval = pEmmaxHelper::tcdf(t, c-1);
 
-	//if ( ( fabs(sy) > 1e-6 ) || ( fabs(sx) > 1e-6 ) ) {
-	//error("sy = %lg, sx = %lg\n",sy,sx);
-	//}
+        /*
+        beta = sxy/sxx;
+        sebeta = (syy*sxx-sxy*sxy)/(c*sxx*sxx);
+        r = sxy/sqrt(sxx*sxy);
+        t = r * sqrt((c-1)/(1-r*r+pEmmaxHelper::ZEPS));
+        pval = pEmmaxHelper::tcdf(t, c-1);
+        */
 
-	//sdx = sqrt(xsq/c-xsum*xsum/c/(c+1.));
-	//sdy = sqrt(ysq/c-ysum*ysum/c/(c+1.));
-	
-	//r = (xy/c - xsum*ysum/c/(c+1))/(sdx*sdy);
-	//beta = r * sdy / sdx;
+        //if ( ( fabs(sy) > 1e-6 ) || ( fabs(sx) > 1e-6 ) ) {
+        //error("sy = %lg, sx = %lg\n",sy,sx);
+        //}
 
-	//sebeta = sdy * sqrt( (1-r*r+pEmmaxHelper::ZEPS)*c/(c-1) );
+        //sdx = sqrt(xsq/c-xsum*xsum/c/(c+1.));
+        //sdy = sqrt(ysq/c-ysum*ysum/c/(c+1.));
 
-	// get the count of possible genotypes
-	emx.tvcf.GENOCNT(i,genocnts);
-	if ( binaryFlag ) { emx.tvcf.CASECTRLCNT(i,casectrlcnts,isCases); }
+        //r = (xy/c - xsum*ysum/c/(c+1))/(sdx*sdy);
+        //beta = r * sdy / sdx;
 
-	// CHROM BEG END MARKER_ID NS AC CALLRATE GENOCNT MAF STAT PVALUE BETA SEBETA R2
-	//fprintf(stderr,"bar %s:%d %s %s\n",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.markers[i].c_str(),emx.tvcf.refs[i].c_str());
-	wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf\t%.4lf\t%.4lg\t%.4lg\t%.4lg\t%.4lg",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i), t, pval, beta, sebeta, r*r);
-	if ( binaryFlag ) {
-	  wf.printf("\t%d/%d/%d\t%d/%d/%d",casectrlcnts[0],casectrlcnts[1],casectrlcnts[2],casectrlcnts[3],casectrlcnts[4],casectrlcnts[5]);
-	}
-	wf.printf("\n");
-	++m;
+        //sebeta = sdy * sqrt( (1-r*r+pEmmaxHelper::ZEPS)*c/(c-1) );
+
+        // get the count of possible genotypes
+        emx.tvcf.GENOCNT(i,genocnts);
+        if ( binaryFlag ) { emx.tvcf.CASECTRLCNT(i,casectrlcnts,isCases); }
+
+        // CHROM BEG END MARKER_ID NS AC CALLRATE GENOCNT MAF STAT PVALUE BETA SEBETA R2
+        //fprintf(stderr,"bar %s:%d %s %s\n",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.markers[i].c_str(),emx.tvcf.refs[i].c_str());
+        wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf\t%.4lf\t%.4lg\t%.4lg\t%.4lg\t%.4lg",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i), t, pval, beta, sebeta, r*r);
+        if ( binaryFlag ) {
+          wf.printf("\t%d/%d/%d\t%d/%d/%d",casectrlcnts[0],casectrlcnts[1],casectrlcnts[2],casectrlcnts[3],casectrlcnts[4],casectrlcnts[5]);
+        }
+        wf.printf("\n");
+        ++m;
       }
       else {
-	mu = emx.tvcf.alleleFreq(i)*2.;
-	emx.tvcf.GENOCNT(i,genocnts);
-	if ( binaryFlag ) { emx.tvcf.CASECTRLCNT(i,casectrlcnts,isCases); }
-	wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf\tNA\tNA\tNA\tNA\tNA",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1, emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i));
-	if ( binaryFlag ) {
-	  wf.printf("\t%d/%d/%d\t%d/%d/%d",casectrlcnts[0],casectrlcnts[1],casectrlcnts[2],casectrlcnts[3],casectrlcnts[4],casectrlcnts[5]);
-	}
-	wf.printf("\n");
+        mu = emx.tvcf.alleleFreq(i)*2.;
+        emx.tvcf.GENOCNT(i,genocnts);
+        if ( binaryFlag ) { emx.tvcf.CASECTRLCNT(i,casectrlcnts,isCases); }
+        wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf\tNA\tNA\tNA\tNA\tNA",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1, emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i));
+        if ( binaryFlag ) {
+          wf.printf("\t%d/%d/%d\t%d/%d/%d",casectrlcnts[0],casectrlcnts[1],casectrlcnts[2],casectrlcnts[3],casectrlcnts[4],casectrlcnts[5]);
+        }
+        wf.printf("\n");
       }
     }
     fprintf(stderr,"%d markers included\n",m);
@@ -606,13 +605,13 @@ int runBurdenAssoc(int argc, char** argv) {
   std::vector<std::string> tokens;
   while( (line = treml.getLine()) != NULL ) {
     pFile::tokenizeLine(line," \t\r\n", tokens);
-    if ( tokens.size() != 2 ) 
+    if ( tokens.size() != 2 )
       error("Phenotype file must have two columns");
     delta = atof(tokens[1].c_str());
     notice("Reading delta = %lf",delta);
     break;
   }
-  
+
   int c = emx.evalR.rows();
   int n = (int)emx.inds.size();
   emx.T.resize(c,n);
@@ -649,7 +648,7 @@ int runBurdenAssoc(int argc, char** argv) {
     if ( line[0] == '#' ) continue;
     //notice("foo");
     //notice("Parsing line %s",line);
-    pFile::tokenizeLine(line," \t\r\n", tokens); 
+    pFile::tokenizeLine(line," \t\r\n", tokens);
     //notice("goo");
 
     //notice("tokens.size() = %d",(int)tokens.size());
@@ -665,25 +664,25 @@ int runBurdenAssoc(int argc, char** argv) {
     for(i=0; i < n; ++i) { x(i) = 0; }
 
     for(i=0; i < m; ++i) {
-      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) && 
-	   ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
-	   ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
-	   ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
-	   ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
+      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) &&
+           ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
+           ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
+           ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
+           ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
 
-	int offset = i * emx.tvcf.nInds;
-	++nPass;
-	mu = emx.tvcf.alleleFreq(i)*2.;
-	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( !isnanf(emx.tvcf.genos[j + offset]) ) {
-	    if ( mu < 1 ) { // AF < .5
-	      if ( emx.tvcf.genos[j + offset] > DS_THRES ) x(j) = 1.;
-	    }
-	    else {
-	      if ( emx.tvcf.genos[j + offset] < 2-DS_THRES ) x(j) = 1.;
-	    }
-	  }
-	}
+        int offset = i * emx.tvcf.nInds;
+        ++nPass;
+        mu = emx.tvcf.alleleFreq(i)*2.;
+        for(j=0; j < emx.tvcf.nInds; ++j) {
+          if ( !std::isnan(emx.tvcf.genos[j + offset]) ) {
+            if ( mu < 1 ) { // AF < .5
+              if ( emx.tvcf.genos[j + offset] > DS_THRES ) x(j) = 1.;
+            }
+            else {
+              if ( emx.tvcf.genos[j + offset] < 2-DS_THRES ) x(j) = 1.;
+            }
+          }
+        }
       }
     }
 
@@ -698,14 +697,14 @@ int runBurdenAssoc(int argc, char** argv) {
       //xy = xsum = xsq = 0;
       sx = sxx = sxy = 0;
       for(j=0; j < c; ++j) {
-	//xy += xt(j)*yt(j);
-	//xsum += xt(j);
-	//xsq += xt(j)*xt(j);
-	sxy += (xt(j)*yt(j));
-	sx += xt(j);
-	sxx += (xt(j)*xt(j));
+        //xy += xt(j)*yt(j);
+        //xsum += xt(j);
+        //xsq += xt(j)*xt(j);
+        sxy += (xt(j)*yt(j));
+        sx += xt(j);
+        sxx += (xt(j)*xt(j));
       }
-      
+
       beta = ((c+1.)*sxy-sx*sy)/((c+1.)*sxx-sx*sx);
       varE = 1/(c+1.)/(c-1.)*((c+1.)*syy-sy*sy-beta*beta*((c+1.)*sxx-sx*sx));
       //notice("varE=%lf",varE);
@@ -716,13 +715,13 @@ int runBurdenAssoc(int argc, char** argv) {
 
       //sdx = sqrt(xsq/c-xsum*xsum/c/c);
       //sdy = sqrt(ysq/c-ysum*ysum/c/c);
-      
+
       //r = (xy/c - xsum*ysum/c/c)/(sdx*sdy);
       //beta = r * sdy / sdx;
       //sebeta = sdy * sqrt( (1-r*r+pEmmaxHelper::ZEPS)*c/(c-1) );
       //t = r * sqrt((c-1)/(1-r*r+pEmmaxHelper::ZEPS));
       //pval = pEmmaxHelper::tcdf(t, c-1);
-      
+
       wf.printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%.5lf\t%.4lf\t%.4lg\t%.4lg\t%.4lg\t%.4lg\n",emx.tvcf.groupChrom.c_str(),emx.tvcf.groupBeg,emx.tvcf.groupEnd,emx.tvcf.groupID.c_str(), m, nPass, (int)nx, nx < n ? (double)nx/n : (double)(n-nx)/n,t,pval,beta,sebeta,r*r);
       //wf.printf("%s\t%d\t%d\t%d\t%.5lf\t%.4lf\t%.4lg\t%.4lf\t%.4lf\t%.5lf\n",tvcf.markerGroupName.c_str(), m, nPass, (int)nx, nx < n ? (double)nx/n : (double)(n-nx)/n,t,pval,beta,sebeta,r*r);
     }
@@ -733,6 +732,7 @@ int runBurdenAssoc(int argc, char** argv) {
     //notice("bar");
   }
   return 0;
+
 }
 
 // y(t) ~ Xt + Zt + et
@@ -788,13 +788,13 @@ int runEmmaxVT(int argc, char** argv) {
   std::vector<std::string> tokens;
   while( (line = treml.getLine()) != NULL ) {
     pFile::tokenizeLine(line," \t\r\n", tokens);
-    if ( tokens.size() != 2 ) 
+    if ( tokens.size() != 2 )
       error("Phenotype file must have two columns");
     delta = atof(tokens[1].c_str());
     notice("Reading delta = %lf",delta);
     break;
   }
-  
+
   int c = emx.evalR.rows();
   int n = (int)emx.inds.size();
   emx.T.resize(c,n);
@@ -817,9 +817,9 @@ int runEmmaxVT(int argc, char** argv) {
   std::vector<int> irand;
   int i, j, k;
   /*
-  for(i=0; i < n; ++i) { 
+  for(i=0; i < n; ++i) {
     irand.push_back(i);
-    Yr(0,i) = y(i); 
+    Yr(0,i) = y(i);
   }
   for(i=1; i < arg.minperm+1; ++i) {
     std::random_shuffle(irand.begin(), irand.end());
@@ -834,9 +834,9 @@ int runEmmaxVT(int argc, char** argv) {
   VectorXd nVarYtr = sqYtr - sumYtr.array().square()/c;
   */
 
-  for(i=0; i < c; ++i) { 
+  for(i=0; i < c; ++i) {
     irand.push_back(i);
-    Ytr(0,i) = yt(i); 
+    Ytr(0,i) = yt(i);
   }
   for(i=1; i < arg.minperm+1; ++i) {
     std::random_shuffle(irand.begin(), irand.end());
@@ -865,7 +865,7 @@ int runEmmaxVT(int argc, char** argv) {
 
     std::vector<std::string> tokens;
     if ( line[0] == '#' ) continue;
-    pFile::tokenizeLine(line," \t\r\n", tokens); 
+    pFile::tokenizeLine(line," \t\r\n", tokens);
 
     //notice("Reading group %s",tokens[0].c_str());
 
@@ -874,38 +874,38 @@ int runEmmaxVT(int argc, char** argv) {
 
     std::vector<int> g;
     std::vector<int> macs;
-  
-    for(i=0; i < m; ++i) {
-      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) && 
-	   ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
-	   ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
-	   ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
-	   ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
 
-	int offset = i * emx.tvcf.nInds;
-	int mac = 0;
-	mu = emx.tvcf.alleleFreq(i)*2.;
-	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( !isnanf(emx.tvcf.genos[j + offset]) ) {
-	    if ( mu < 1 ) { // AF < .5
-	      g.push_back(emx.tvcf.genos[j + offset] > DS_THRES ? 1 : 0 );
-	    }
-	    else {
-	      g.push_back(emx.tvcf.genos[j + offset] < 2-DS_THRES ? 1 : 0 );	      
-	    }
-	    mac += g.back();
-	  }
-	  else {
-	    g.push_back(0);
-	  }
-	}
-	if ( arg.scoref.empty() ) {
-	  macs.push_back(mac);
-	}
-	else {
-	  // use GERP/PhyloP score * 1000 as threshold
-	  macs.push_back((int)floor(gScore.baseScore(emx.tvcf.markers[i].c_str())*(-1000)+.5));
-	}
+    for(i=0; i < m; ++i) {
+      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) &&
+           ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
+           ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
+           ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
+           ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
+
+        int offset = i * emx.tvcf.nInds;
+        int mac = 0;
+        mu = emx.tvcf.alleleFreq(i)*2.;
+        for(j=0; j < emx.tvcf.nInds; ++j) {
+          if ( !std::isnan(emx.tvcf.genos[j + offset]) ) {
+            if ( mu < 1 ) { // AF < .5
+              g.push_back(emx.tvcf.genos[j + offset] > DS_THRES ? 1 : 0 );
+            }
+            else {
+              g.push_back(emx.tvcf.genos[j + offset] < 2-DS_THRES ? 1 : 0 );
+            }
+            mac += g.back();
+          }
+          else {
+            g.push_back(0);
+          }
+        }
+        if ( arg.scoref.empty() ) {
+          macs.push_back(mac);
+        }
+        else {
+          // use GERP/PhyloP score * 1000 as threshold
+          macs.push_back((int)floor(gScore.baseScore(emx.tvcf.markers[i].c_str())*(-1000)+.5));
+        }
       }
     }
 
@@ -914,36 +914,36 @@ int runEmmaxVT(int argc, char** argv) {
     if ( mv > 0 ) { // at least one marker
       std::set<int> umacSet;
       for(i=0; i < mv; ++i) {
-	umacSet.insert(macs[i]);
+        umacSet.insert(macs[i]);
       }
-      
+
       std::vector<int> umacs;
       std::map<int,int> iumacs;
-      for(std::set<int>::iterator it = umacSet.begin(); 
-	  it != umacSet.end(); ++it) {
-	iumacs[*it] = umacs.size();
-	umacs.push_back(*it);
+      for(std::set<int>::iterator it = umacSet.begin();
+          it != umacSet.end(); ++it) {
+        iumacs[*it] = umacs.size();
+        umacs.push_back(*it);
       }
       int numacs = (int)umacs.size(); // number of unique MACs
 
       //notice("n = %d, mv = %d, numacs = %d",n, mv, numacs);
       //notice("g.size() = %d",(int)g.size());
-      
+
       // generate ind * mac incidence matrix
-      MatrixXd C = MatrixXd::Zero(n,numacs); // matrix 
-      
+      MatrixXd C = MatrixXd::Zero(n,numacs); // matrix
+
       // this is 'collapsing-style' variable threshold test
       for(i=0, k=0; i < mv; ++i) {
-	for(j=0; j < n; ++j, ++k) {
-	  if ( g[k] > 0 ) C(j,iumacs[macs[i]]) = 1.;
-	}
+        for(j=0; j < n; ++j, ++k) {
+          if ( g[k] > 0 ) C(j,iumacs[macs[i]]) = 1.;
+        }
       }
 
       // cumulate the incidence matrix
       for(i=1; i < numacs; ++i) {
-	for(j=0; j < n; ++j) {
-	  if ( C(j,i-1) > 0 ) C(j,i) = 1.;
-	}
+        for(j=0; j < n; ++j) {
+          if ( C(j,i-1) > 0 ) C(j,i) = 1.;
+        }
       }
 
       //notice("Transforming collpasing vector (%d x %d) x (%d x %d) x (%d x %d)",Ytr.rows(), Ytr.cols(), emx.T.rows(), emx.T.cols(), C.rows(), C.cols());
@@ -966,66 +966,66 @@ int runEmmaxVT(int argc, char** argv) {
       //notice("Calculating VT statistics");
 
       for(i=0; i < numacs; ++i) {
-	for(j=0; j < arg.minperm+1; ++j) {
-	  sgn = R(j,i) > 0 ? 1 : -1;
-	  R(j,i) -= (sumyt * sumCt(i) / c);
-	  R(j,i) = (R(j,i) * R(j,i)) / ((sqCt(i)-(double)sumCt(i)*sumCt(i)/c)*nvaryt+pEmmaxHelper::ZEPS);
-	  //R(j,i) = (R(j,i) * R(j,i) - sumyt * sumCt(i)) / ((sqCt(i)-(double)sumCt(i)*sumCt(i)/c)*nvaryt+pEmmaxHelper::ZEPS);
-	  if ( j == 0 ) {
-	    if ( R(j,i) > optR2 ) {
-	      optR2 = R(j,i);
-	      optBurden = sumC(i);
-	      optMAC = umacs[i];
-	      optSgn = sgn;
-	    }
-	  }
-	}
+        for(j=0; j < arg.minperm+1; ++j) {
+          sgn = R(j,i) > 0 ? 1 : -1;
+          R(j,i) -= (sumyt * sumCt(i) / c);
+          R(j,i) = (R(j,i) * R(j,i)) / ((sqCt(i)-(double)sumCt(i)*sumCt(i)/c)*nvaryt+pEmmaxHelper::ZEPS);
+          //R(j,i) = (R(j,i) * R(j,i) - sumyt * sumCt(i)) / ((sqCt(i)-(double)sumCt(i)*sumCt(i)/c)*nvaryt+pEmmaxHelper::ZEPS);
+          if ( j == 0 ) {
+            if ( R(j,i) > optR2 ) {
+              optR2 = R(j,i);
+              optBurden = sumC(i);
+              optMAC = umacs[i];
+              optSgn = sgn;
+            }
+          }
+        }
       }
 
       // calculate max chi-squared statistics
       VectorXd maxR2 = R.rowwise().maxCoeff();
-      
+
       // calculate the rank of p-value
       int rank = 0;
       for(i=1; i < arg.minperm+1; ++i) {
-	if ( optR2 <= maxR2(i) ) ++rank;
+        if ( optR2 <= maxR2(i) ) ++rank;
       }
 
       int burdenMAC = (int)sumC(numacs-1);
       int perm = arg.minperm;
 
       if ( rank * 10 < arg.minperm ) {
-	for(perm=arg.minperm*10; perm <= arg.maxperm; perm *= 10) {
-	  int rperm = perm*9/10;
-	  notice("Performing adaptive permutation for additional %d permutations for group %s -- maxR2 = %lg, rank = %d",rperm,tokens[0].c_str(),optR2,rank);
-	  for(int p=0; p < rperm; p += arg.minperm) {
-	    for(i=0; i < arg.minperm; ++i) {
-	      std::random_shuffle(irand.begin(), irand.end());
-	      for(j=0; j < c; ++j) {
-		Ytp(i,j) = yt(irand[j]);
-	      }
-	    }
-	    //Ytp = Yp * emx.T.transpose();
-	    //VectorXd sumYtp = Ytp.rowwise.sum();
-	    //VectorXd sqYtp = Ytp.rowwise.squaredNorm();
-	    //VectorXd nVarYtp = sqYtp - sumYtp.array().square()/c;
+        for(perm=arg.minperm*10; perm <= arg.maxperm; perm *= 10) {
+          int rperm = perm*9/10;
+          notice("Performing adaptive permutation for additional %d permutations for group %s -- maxR2 = %lg, rank = %d",rperm,tokens[0].c_str(),optR2,rank);
+          for(int p=0; p < rperm; p += arg.minperm) {
+            for(i=0; i < arg.minperm; ++i) {
+              std::random_shuffle(irand.begin(), irand.end());
+              for(j=0; j < c; ++j) {
+                Ytp(i,j) = yt(irand[j]);
+              }
+            }
+            //Ytp = Yp * emx.T.transpose();
+            //VectorXd sumYtp = Ytp.rowwise.sum();
+            //VectorXd sqYtp = Ytp.rowwise.squaredNorm();
+            //VectorXd nVarYtp = sqYtp - sumYtp.array().square()/c;
 
-	    R = Ytp * Ct; // (nperm+1) * numacs matrix
-	    for(i=0; i < numacs; ++i) {
-	      for(j=0; j < arg.minperm; ++j) {
-		R(j,i) -= (sumyt * sumCt(i)/c);
-		R(j,i) = (R(j,i) * R(j,i)) / ((sqCt(i)-(double)sumCt(i)*sumCt(i)/c)*nvaryt+pEmmaxHelper::ZEPS);
-		//R(j,i) = (R(j,i) * R(j,i) - sumyt * sumCt(i)) / ((sqCt(i)-(double)sumCt(i)*sumCt(i)/c)*nvaryt+pEmmaxHelper::ZEPS);
-	      }
-	    }
-	    maxR2 = R.rowwise().maxCoeff();
-	    for(i=0; i < arg.minperm; ++i) {
-	      if ( optR2 <= maxR2(i) ) ++rank;
-	    }
-	  }
-	  if ( rank * 10 > arg.minperm ) break;
-	}
-	if ( perm > arg.maxperm ) perm = arg.maxperm;
+            R = Ytp * Ct; // (nperm+1) * numacs matrix
+            for(i=0; i < numacs; ++i) {
+              for(j=0; j < arg.minperm; ++j) {
+                R(j,i) -= (sumyt * sumCt(i)/c);
+                R(j,i) = (R(j,i) * R(j,i)) / ((sqCt(i)-(double)sumCt(i)*sumCt(i)/c)*nvaryt+pEmmaxHelper::ZEPS);
+                //R(j,i) = (R(j,i) * R(j,i) - sumyt * sumCt(i)) / ((sqCt(i)-(double)sumCt(i)*sumCt(i)/c)*nvaryt+pEmmaxHelper::ZEPS);
+              }
+            }
+            maxR2 = R.rowwise().maxCoeff();
+            for(i=0; i < arg.minperm; ++i) {
+              if ( optR2 <= maxR2(i) ) ++rank;
+            }
+          }
+          if ( rank * 10 > arg.minperm ) break;
+        }
+        if ( perm > arg.maxperm ) perm = arg.maxperm;
       }
       wf.printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%.5lf\t%.4lf\t%.4lg\t%.4lg\t%s\t%d\t%.5lf\n",emx.tvcf.groupChrom.c_str(),emx.tvcf.groupBeg,emx.tvcf.groupEnd,emx.tvcf.groupID.c_str(), m, mv, burdenMAC, (double)burdenMAC/n, optR2*(c-1), (rank+1>perm ? 1. : (double)(rank+1.)/perm),optR2,optSgn > 0 ? "+" : "-",optMAC,(double)optBurden/n);
     }
@@ -1110,20 +1110,20 @@ int runGLRT(int argc, char** argv) {
     for(i=0, m=0; i < emx.tvcf.nMarkers; ++i) {
       af = emx.tvcf.alleleFreq(i);
       maf = af > 0.5 ? 1-af : af;
-      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) && 
-	   ( emx.tvcf.MAF(i) <= arg.maxMAF ) && 
-	   ( emx.tvcf.MAC(i) <= arg.maxMAC ) && 
-	   ( emx.tvcf.MAC(i) >= arg.minMAC ) && 
-	   ( emx.tvcf.callRate(i) >= arg.minCallRate ) ) {
-	double lrt = emx.tvcf.LRT(i,g1,g2,af1,af2);
-	double pval = chisq1cdf(lrt);
+      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) &&
+           ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
+           ( emx.tvcf.MAC(i) <= arg.maxMAC ) &&
+           ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
+           ( emx.tvcf.callRate(i) >= arg.minCallRate ) ) {
+        double lrt = emx.tvcf.LRT(i,g1,g2,af1,af2);
+        double pval = chisq1cdf(lrt);
 
-	// MARKER_ID NS MAF STAT PVALUE AF AF1 AF2
-	wf.printf("%s\t%d\t%d\t%s\t%d\t%.5lf\t%.4lf\t%.4lg\t%.5lf\t%.5lf\t%.5lf\n",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(),emx.tvcf.numAlleles[i]/2,maf,lrt,pval,af,af1,af2);
-	++m;
+        // MARKER_ID NS MAF STAT PVALUE AF AF1 AF2
+        wf.printf("%s\t%d\t%d\t%s\t%d\t%.5lf\t%.4lf\t%.4lg\t%.5lf\t%.5lf\t%.5lf\n",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(),emx.tvcf.numAlleles[i]/2,maf,lrt,pval,af,af1,af2);
+        ++m;
       }
       else {
-	wf.printf("%s\t%d\t%d\t%s\t%d\t%.5lf\tNA\tNA\t%.5lf\tNA\tNA\n",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(),emx.tvcf.numAlleles[i]/2,maf,af);
+        wf.printf("%s\t%d\t%d\t%s\t%d\t%.5lf\tNA\tNA\t%.5lf\tNA\tNA\n",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(),emx.tvcf.numAlleles[i]/2,maf,af);
       }
     }
     fprintf(stderr,"%d markers included\n",m);
@@ -1186,7 +1186,8 @@ int runSimul(int argc, char** argv) {
       r1[i] = sqrt(-2.0*log(x1)) * cos(M_PI * 2 * x2);
       r2[i] = sqrt(-2.0*log(x1)) * sin(M_PI * 2 * x2);
     }
-    Y.col(j) = sqrt(arg.h2) * (lt.matrixL() * r1) + sqrt(1.-arg.h2) * r2;
+    //Y.col(j) = sqrt(arg.h2) * (lt.matrixL() * r1) + sqrt(1.-arg.h2) * r2;
+    Y.col(j) = (lt.matrixL() * r1) * sqrt(arg.h2) + sqrt(1.-arg.h2) * r2;
     if ( arg.binary  ) {
       for(int i=0; i < n; ++i) {
 	v.push_back(Y(i,j));
@@ -1592,9 +1593,9 @@ int runVT(int argc, char** argv) {
   std::vector<int> irand;
   double sumyr = 0, sqyr = 0;
   int i, j, k;
-  for(i=0; i < n; ++i) { 
+  for(i=0; i < n; ++i) {
     irand.push_back(i);
-    Yr(0,i) = yr(i); 
+    Yr(0,i) = yr(i);
     sumyr += yr(i);
     sqyr += yr(i)*yr(i);
   }
@@ -1628,7 +1629,7 @@ int runVT(int argc, char** argv) {
   while( (line = tgrp.getLine()) != NULL ) {
     std::vector<std::string> tokens;
     if ( line[0] == '#' ) continue;
-    pFile::tokenizeLine(line," \t\r\n", tokens); 
+    pFile::tokenizeLine(line," \t\r\n", tokens);
 
     //notice("Reading group %s",tokens[0].c_str());
 
@@ -1640,54 +1641,54 @@ int runVT(int argc, char** argv) {
     std::vector<int> macs;  // MAC or score for m markers
     std::vector<int> ipass;
     const char* genoLabels[4] = {"./.","0/0","0/1","1/1"};
-  
+
     for(i=0; i < m; ++i) {
-      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) && 
-	   ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
-	   ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
-	   ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
-	   ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) && 
-	   ( (!arg.recessive) || ( emx.tvcf.HOMMINC(i) > 0 ) )
-	   ) {
+      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) &&
+           ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
+           ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
+           ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
+           ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) &&
+           ( (!arg.recessive) || ( emx.tvcf.HOMMINC(i) > 0 ) )
+        ) {
 
-	int offset = i * emx.tvcf.nInds;
-	int mac = emx.tvcf.MAC(i);
-	mu = emx.tvcf.alleleFreq(i)*2.;
-	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( !isnanf(emx.tvcf.genos[j + offset]) ) {
-	    rg.push_back(1+(int)emx.tvcf.genos[j + offset]);
-	    if ( mu < 1 ) { // AF < .5
-	      if ( arg.recessive ) {
-		g.push_back(emx.tvcf.genos[j + offset] > 1 ? 1 : 0 );
-	      }
-	      else {
-		g.push_back(emx.tvcf.genos[j + offset] > 0 ? 1 : 0 );
-	      }
-	    }
-	    else {
-	      if ( arg.recessive ) {
-		g.push_back(emx.tvcf.genos[j + offset] < 1 ? 1 : 0 );	      
-	      }
-	      else {
-		g.push_back(emx.tvcf.genos[j + offset] < 2 ? 1 : 0 );
-	      }
-	    }
-	    //mac += g.back();
-	  }
-	  else {
-	    g.push_back(0);
-	    rg.push_back(0);
-	  }
-	}
+        int offset = i * emx.tvcf.nInds;
+        int mac = emx.tvcf.MAC(i);
+        mu = emx.tvcf.alleleFreq(i)*2.;
+        for(j=0; j < emx.tvcf.nInds; ++j) {
+          if ( !std::isnan(emx.tvcf.genos[j + offset]) ) {
+            rg.push_back(1+(int)emx.tvcf.genos[j + offset]);
+            if ( mu < 1 ) { // AF < .5
+              if ( arg.recessive ) {
+                g.push_back(emx.tvcf.genos[j + offset] > 1 ? 1 : 0 );
+              }
+              else {
+                g.push_back(emx.tvcf.genos[j + offset] > 0 ? 1 : 0 );
+              }
+            }
+            else {
+              if ( arg.recessive ) {
+                g.push_back(emx.tvcf.genos[j + offset] < 1 ? 1 : 0 );
+              }
+              else {
+                g.push_back(emx.tvcf.genos[j + offset] < 2 ? 1 : 0 );
+              }
+            }
+            //mac += g.back();
+          }
+          else {
+            g.push_back(0);
+            rg.push_back(0);
+          }
+        }
 
-	ipass.push_back(i);
-	if ( arg.scoref.empty() ) {
-	  macs.push_back(mac);
-	}
-	else {
-	  // use GERP/PhyloP score * 1000 as threshold
-	  macs.push_back((int)floor(gScore.baseScore(emx.tvcf.markers[i].c_str())*(-1000)+.5));
-	}
+        ipass.push_back(i);
+        if ( arg.scoref.empty() ) {
+          macs.push_back(mac);
+        }
+        else {
+          // use GERP/PhyloP score * 1000 as threshold
+          macs.push_back((int)floor(gScore.baseScore(emx.tvcf.markers[i].c_str())*(-1000)+.5));
+        }
       }
     }
 
@@ -1696,44 +1697,44 @@ int runVT(int argc, char** argv) {
     if ( mv > 0 ) { // at least one marker
       std::set<int> umacSet;          // contains the list of all MACs/SCOREs
       for(i=0; i < mv; ++i) {
-	umacSet.insert(macs[i]);
+        umacSet.insert(macs[i]);
       }
-      
+
       std::vector<int> umacs;    // list of MAC/Score thresholds
       std::map<int,int> iumacs;  // iumacs[MAC] gives index
-      for(std::set<int>::iterator it = umacSet.begin(); 
-	  it != umacSet.end(); ++it) {
-	iumacs[*it] = umacs.size(); 
-	umacs.push_back(*it);
+      for(std::set<int>::iterator it = umacSet.begin();
+          it != umacSet.end(); ++it) {
+        iumacs[*it] = umacs.size();
+        umacs.push_back(*it);
       }
       int numacs = (int)umacs.size(); // number of unique MACs
 
       //notice("n = %d, mv = %d, numacs = %d",n, mv, numacs);
       //notice("g.size() = %d",(int)g.size());
-      
+
       // generate ind * mac incidence matrix
       MatrixXd C = MatrixXd::Zero(n,numacs); // matrix of n * m'
-      
+
       // this is 'collapsing-style' variable threshold test
       for(i=0, k=0; i < mv; ++i) {
-	for(j=0; j < n; ++j, ++k) {
-	  if ( g[k] > 0 ) C(j,iumacs[macs[i]]) = 1.;
-	}
+        for(j=0; j < n; ++j, ++k) {
+          if ( g[k] > 0 ) C(j,iumacs[macs[i]]) = 1.;
+        }
       }
 
       // cumulate the incidence matrix
       for(i=1; i < numacs; ++i) {
-	for(j=0; j < n; ++j) {
-	  if ( C(j,i-1) > 0 ) C(j,i) = 1.;
-	}
+        for(j=0; j < n; ++j) {
+          if ( C(j,i-1) > 0 ) C(j,i) = 1.;
+        }
       }
 
       // so C(j,i) = 1 if individual j carries RV with MAC <= umacs[i]
       VectorXd sumC = C.colwise().sum();
-      VectorXd sqC = C.colwise().squaredNorm();   
+      VectorXd sqC = C.colwise().squaredNorm();
 
       // calculate correlation coefficient
-      MatrixXd R = Yr * C; // (nperm+1) * numacs matrix 
+      MatrixXd R = Yr * C; // (nperm+1) * numacs matrix
       int optMAC = 0;
       double optBurden = 0;
       double optR2 = 0;
@@ -1741,57 +1742,57 @@ int runVT(int argc, char** argv) {
       int sgn;
 
       for(i=0; i < numacs; ++i) {
-	for(j=0; j < arg.minperm+1; ++j) {
-	  sgn = R(j,i) > 0 ? 1 : -1;
-	  R(j,i) = R(j,i) * R(j,i) / ((sqC(i)-(double)sumC(i)*sumC(i)/n)*sqyr+pEmmaxHelper::ZEPS);
-	  if ( j == 0 ) {
-	    if ( R(j,i) > optR2 ) {
-	      optR2 = R(j,i);
-	      optBurden = sumC(i);
-	      optMAC = umacs[i];
-	      optSgn = sgn;
-	    }
-	  }
-	}
+        for(j=0; j < arg.minperm+1; ++j) {
+          sgn = R(j,i) > 0 ? 1 : -1;
+          R(j,i) = R(j,i) * R(j,i) / ((sqC(i)-(double)sumC(i)*sumC(i)/n)*sqyr+pEmmaxHelper::ZEPS);
+          if ( j == 0 ) {
+            if ( R(j,i) > optR2 ) {
+              optR2 = R(j,i);
+              optBurden = sumC(i);
+              optMAC = umacs[i];
+              optSgn = sgn;
+            }
+          }
+        }
       }
 
       // calculate max chi-squared statistics
       VectorXd maxR2 = R.rowwise().maxCoeff();
-      
+
       // calculate the rank of p-value
       int rank = 0;
       for(i=1; i < arg.minperm+1; ++i) {
-	if ( optR2 <= maxR2(i) ) ++rank;
+        if ( optR2 <= maxR2(i) ) ++rank;
       }
 
       int burdenMAC = sumC(numacs-1);
       int perm = arg.minperm;
 
       if ( rank * 10 < arg.minperm ) {
-	for(perm=arg.minperm*10; perm <= arg.maxperm; perm *= 10) {
-	  int rperm = perm*9/10;
-	  notice("Performing adaptive permutation for additional %d permutations for group %s -- maxR2 = %lg, rank = %d",rperm,tokens[0].c_str(),optR2,rank);
-	  for(int p=0; p < rperm; p += arg.minperm) {
-	    for(i=0; i < arg.minperm; ++i) {
-	      std::random_shuffle(irand.begin(), irand.end());
-	      for(j=0; j < n; ++j) {
-		Yp(i,j) = yr(irand[j]);
-	      }
-	    }
-	    R = Yp * C; // (nperm+1) * numacs matrix
-	    for(i=0; i < numacs; ++i) {
-	      for(j=0; j < arg.minperm; ++j) {
-		R(j,i) = R(j,i) * R(j,i) / ((sqC(i)-(double)sumC(i)*sumC(i)/n)*sqyr+pEmmaxHelper::ZEPS);
-	      }
-	    }
-	    maxR2 = R.rowwise().maxCoeff();
-	    for(i=0; i < arg.minperm; ++i) {
-	      if ( optR2 <= maxR2(i) ) ++rank;
-	    }
-	  }
-	  if ( rank * 10 > arg.minperm ) break;
-	}
-	if ( perm > arg.maxperm ) perm = arg.maxperm;
+        for(perm=arg.minperm*10; perm <= arg.maxperm; perm *= 10) {
+          int rperm = perm*9/10;
+          notice("Performing adaptive permutation for additional %d permutations for group %s -- maxR2 = %lg, rank = %d",rperm,tokens[0].c_str(),optR2,rank);
+          for(int p=0; p < rperm; p += arg.minperm) {
+            for(i=0; i < arg.minperm; ++i) {
+              std::random_shuffle(irand.begin(), irand.end());
+              for(j=0; j < n; ++j) {
+                Yp(i,j) = yr(irand[j]);
+              }
+            }
+            R = Yp * C; // (nperm+1) * numacs matrix
+            for(i=0; i < numacs; ++i) {
+              for(j=0; j < arg.minperm; ++j) {
+                R(j,i) = R(j,i) * R(j,i) / ((sqC(i)-(double)sumC(i)*sumC(i)/n)*sqyr+pEmmaxHelper::ZEPS);
+              }
+            }
+            maxR2 = R.rowwise().maxCoeff();
+            for(i=0; i < arg.minperm; ++i) {
+              if ( optR2 <= maxR2(i) ) ++rank;
+            }
+          }
+          if ( rank * 10 > arg.minperm ) break;
+        }
+        if ( perm > arg.maxperm ) perm = arg.maxperm;
       }
       wf.printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%.5lf\t%.4lf\t%.4lg\t%.4lg\t%s\t%d\t%.5lf\n",emx.tvcf.groupChrom.c_str(),emx.tvcf.groupBeg,emx.tvcf.groupEnd,emx.tvcf.groupID.c_str(), m, mv, burdenMAC, (double)burdenMAC/n, optR2*n, (rank+1>perm ? 1. : (double)(rank+1.)/perm),optR2,optSgn > 0 ? "+" : "-",optMAC,(double)optBurden/n);
       //fprintf(stderr,"%s\t%d\t%d\t%d\t%.5lf\t%.4lf\t%.4lg\t%.4lf\t%.4lf\t%.5lf\n",tokens[0].c_str(), m, mv, 0, 0., 0., (rank+1.)/(arg.minperm),0.,0.,maxChisq(0));
@@ -1800,20 +1801,20 @@ int runVT(int argc, char** argv) {
 
       //int iumac = iumacs[optMAC];
       for(i=0; i < (int)macs.size(); ++i) {
-	if ( macs[i] <= optMAC ) {
-	  for(j=0; j < n; ++j) {
-	    if ( g[j + i*n] > 0 ) {
-	      vf.printf("%s\t%s\t%.5lf\t%d\t%d\t%s\t%s\n",
-			emx.tvcf.groupID.c_str(),
-			emx.tvcf.markers[ipass[i]].c_str(),
-			emx.tvcf.alleleFreq(ipass[i]),
-			macs[i],
-			optMAC,
-			emx.tvcf.inds[j].c_str(),
-			genoLabels[rg[j + i * n]]);
-	    }
-	  }
-	}
+        if ( macs[i] <= optMAC ) {
+          for(j=0; j < n; ++j) {
+            if ( g[j + i*n] > 0 ) {
+              vf.printf("%s\t%s\t%.5lf\t%d\t%d\t%s\t%s\n",
+                emx.tvcf.groupID.c_str(),
+                emx.tvcf.markers[ipass[i]].c_str(),
+                emx.tvcf.alleleFreq(ipass[i]),
+                macs[i],
+                optMAC,
+                emx.tvcf.inds[j].c_str(),
+                genoLabels[rg[j + i * n]]);
+            }
+          }
+        }
       }
     }
     else {
@@ -1888,14 +1889,14 @@ int runDump(int argc, char** argv) {
       notice("Found %d distinct phenotype values. Considering them categorical values",(int)phenoCnts.size());
       std::map<double,int> pheno2bin;
       for(std::map<double,int>::iterator it = phenoCnts.begin();
-	  it != phenoCnts.end(); ++it) {
-	pheno2bin[it->first] = (int)cnts.size();
-	mins.push_back(it->first);
-	maxs.push_back(it->first);
-	cnts.push_back(it->second);
+          it != phenoCnts.end(); ++it) {
+        pheno2bin[it->first] = (int)cnts.size();
+        mins.push_back(it->first);
+        maxs.push_back(it->first);
+        cnts.push_back(it->second);
       }
       for(int i=0; i < n; ++i) {
-	bins.push_back(pheno2bin[emx.y(i)]);
+        bins.push_back(pheno2bin[emx.y(i)]);
       }
       nbins = (int)mins.size();
     }
@@ -1907,23 +1908,23 @@ int runDump(int argc, char** argv) {
       int cumCnts = 0;
       int curBin = 0;
       for(std::map<double,int>::iterator it = phenoCnts.begin();
-	  it != phenoCnts.end(); ++it) {
-	if ( curBin == (int)mins.size() ) {
-	  mins.push_back(it->first);
-	  maxs.push_back(it->first);
-	  cnts.push_back(it->second);
-	}
-	else {
-	  maxs.back() = it->first;
-	  cnts.back() += it->second;
-	}
-	cumCnts += it->second;
-	
-	if ( cumCnts > (double)(curBin + 1.)/nbins*nsize ) { ++curBin; }
+          it != phenoCnts.end(); ++it) {
+        if ( curBin == (int)mins.size() ) {
+          mins.push_back(it->first);
+          maxs.push_back(it->first);
+          cnts.push_back(it->second);
+        }
+        else {
+          maxs.back() = it->first;
+          cnts.back() += it->second;
+        }
+        cumCnts += it->second;
+
+        if ( cumCnts > (double)(curBin + 1.)/nbins*nsize ) { ++curBin; }
       }
 
       if ( nbins != (int)mins.size() ) {
-	error("Total number of bins is %d when expecting %d",(int)mins.size(),nbins);
+        error("Total number of bins is %d when expecting %d",(int)mins.size(),nbins);
       }
 
       //notice("foo");
@@ -1931,26 +1932,26 @@ int runDump(int argc, char** argv) {
       int i,j;
       bins.resize(n,0);
       for(i=0; i < n; ++i) {
-	for(j=0; j < nbins; ++j) {
-	  if ( ( emx.y(i) >= mins[j] ) && ( emx.y(i) <= maxs[j] ) ) {
-	    bins[i] = j;
-	    break;
-	  }
-	}
-	if ( j == nbins ) {
-	  error("Cannot categorize phenotype value %lf",emx.y(i));
-	}
+        for(j=0; j < nbins; ++j) {
+          if ( ( emx.y(i) >= mins[j] ) && ( emx.y(i) <= maxs[j] ) ) {
+            bins[i] = j;
+            break;
+          }
+        }
+        if ( j == nbins ) {
+          error("Cannot categorize phenotype value %lf",emx.y(i));
+        }
       }
-      
+
       if ( n != (int)bins.size() ) {
-	error("Total number of instanced is %d when expecting %d",(int)bins.size(),n);
+        error("Total number of instanced is %d when expecting %d",(int)bins.size(),n);
       }
     }
   }
 
   std::vector<std::string> tokens;
   std::vector<float> genos;
-  std::vector<float> afs;  
+  std::vector<float> afs;
   if ( arg.groupf.empty() ) {
     pFile::tokenizeLine(arg.markerset.c_str()," \t\r\n",tokens);
   }
@@ -1962,10 +1963,10 @@ int runDump(int argc, char** argv) {
       if ( line[0] == '#' ) continue;
       pFile::tokenizeLine(line," \t\r\n", tokens2);
       if ( tokens2[0] == arg.markerset ) {
-	for(int i=1; i < (int)tokens2.size(); ++i) {
-	  tokens.push_back(tokens2[i]);
-	}
-	break;
+        for(int i=1; i < (int)tokens2.size(); ++i) {
+          tokens.push_back(tokens2[i]);
+        }
+        break;
       }
     }
     if ( tokens.size() == 0 ) {
@@ -1979,13 +1980,13 @@ int runDump(int argc, char** argv) {
   int i, j, nPass = 0;
   std::vector<std::string> passMarkers;
   for(i=0; i < m; ++i) {
-    if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) && 
-	 ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
-	 ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
-	 ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
-	 ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
+    if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) &&
+         ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
+         ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
+         ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
+         ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
       for(j=0; j < n; ++j) {
-	genos.push_back(emx.tvcf.genos[j + n*i]);
+        genos.push_back(emx.tvcf.genos[j + n*i]);
       }
       afs.push_back(emx.tvcf.alleleFreq(i));
       passMarkers.push_back(tokens[i]);
@@ -2009,10 +2010,10 @@ int runDump(int argc, char** argv) {
     if ( !arg.scoref.empty() ) { wf.printf("\tSCORE"); }
     for(i=0; i < nbins; ++i) {
       if ( mins[i] == maxs[i] ) {
-	wf.printf("\t%lg (%d)",mins[i],cnts[i]);
+        wf.printf("\t%lg (%d)",mins[i],cnts[i]);
       }
       else {
-	wf.printf("\t[%lg,%lg] (%d)",mins[i],maxs[i],cnts[i]);
+        wf.printf("\t[%lg,%lg] (%d)",mins[i],maxs[i],cnts[i]);
       }
     }
     wf.printf("\n");
@@ -2023,20 +2024,20 @@ int runDump(int argc, char** argv) {
       wf.printf("%s",passMarkers[i].c_str());
       wf.printf("\t%.5lf",afs[i]);
       if ( !arg.scoref.empty() ) {
-	wf.printf("\t%lg",gScore.baseScore(passMarkers[i].c_str()));
+        wf.printf("\t%lg",gScore.baseScore(passMarkers[i].c_str()));
       }
 
       std::vector<int> cnts(nbins*3,0);
       for(j=0; j < n; ++j) {
-	float g = genos[j+n*i];
-	if ( !isnanf(g) ) {
-	  ++cnts[g + bins[j]*3];
-	  if (g != (( afs[i] < 0.5 ) ? 0. : 2.)) collapse[j] = 1;
-	}
+        float g = genos[j+n*i];
+        if ( !std::isnan(g) ) {
+          ++cnts[g + bins[j]*3];
+          if (g != (( afs[i] < 0.5 ) ? 0. : 2.)) collapse[j] = 1;
+        }
       }
 
       for(j=0; j < nbins; ++j) {
-	wf.printf("\t%d,%d,%d",cnts[j*3],cnts[j*3+1],cnts[j*3+2]);
+        wf.printf("\t%d,%d,%d",cnts[j*3],cnts[j*3+1],cnts[j*3+2]);
       }
       wf.printf("\n");
     }
@@ -2045,11 +2046,11 @@ int runDump(int argc, char** argv) {
     std::vector<int> bincollapse(nbins,0);
     for(i=0; i < n; ++i) {
       if ( collapse[i] ) {
-	++ncollapse;
-	++bincollapse[bins[i]];
+        ++ncollapse;
+        ++bincollapse[bins[i]];
       }
-    }      
-    
+    }
+
     wf.printf("---------------------------------------------------------------------------------\n");
     wf.printf("FRAC_WITH_RARE:\t%.5lf",(double)ncollapse/n);
     if ( !arg.scoref.empty() ) { wf.printf("\tNA"); }
@@ -2073,16 +2074,16 @@ int runDump(int argc, char** argv) {
       wf.printf("%s",emx.inds[i].c_str());
       wf.printf("\t%lg",emx.y(i));
       for(j=0; j < emx.ncovs; ++j) {
-	wf.printf("\t%lg",emx.X(i,j));
+        wf.printf("\t%lg",emx.X(i,j));
       }
       for(j=0; j < (int)nPass; ++j) {
-	float g = genos[i + j*n];
-	if ( isnanf(g) ) {
-	  wf.printf("\tNA");
-	}
-	else {
-	  wf.printf("\t%lf",g);
-	}
+        float g = genos[i + j*n];
+        if ( std::isnan(g) ) {
+          wf.printf("\tNA");
+        }
+        else {
+          wf.printf("\t%lf",g);
+        }
       }
       wf.printf("\n");
     }
@@ -2141,10 +2142,10 @@ int runVcfInfo(int argc, char** argv) {
     for(int i=0; i < emx.tvcf.nMarkers; ++i) {
       wf.printf("%s\t%d\t%d\t%s\t%d\t%.5lf\t%.2lf\t%.5lf\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(),emx.tvcf.numAlleles[i]/2,emx.tvcf.alleleFreq(i),emx.tvcf.sumAlleles[i],emx.tvcf.callRate(i),emx.tvcf.RSQ(i));
       if ( arg.scoref.empty() ) {
-	wf.printf("\tNA\n");
+        wf.printf("\tNA\n");
       }
       else {
-	wf.printf("\t%.4lf\n",gScore.baseScore(emx.tvcf.markers[i].c_str()));
+        wf.printf("\t%.4lf\n",gScore.baseScore(emx.tvcf.markers[i].c_str()));
       }
     }
   }
@@ -2419,69 +2420,69 @@ int runMultiAssoc(int argc, char** argv) {
     M += emx.tvcf.nMarkers;
     notice("Processing %d markers across %d individuals...", M, emx.tvcf.nInds);
     for(i=0, m=0; i < emx.tvcf.nMarkers; ++i) {
-      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) && 
-	   ( emx.tvcf.MAF(i) <= arg.maxMAF ) && 
-	   ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
-	   ( emx.tvcf.MAC(i) <= arg.maxMAC ) &&
-	   ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
-	   ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
+      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) &&
+           ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
+           ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
+           ( emx.tvcf.MAC(i) <= arg.maxMAC ) &&
+           ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
+           ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
 
-	//fprintf(stderr,"%d\n",i);
-	int offset = i * emx.tvcf.nInds;
-	mu = emx.tvcf.alleleFreq(i)*2.;
-	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( isnanf(emx.tvcf.genos[j + offset]) ) {
-	    x(j) = mu;
-	  }
-	  else {
-	    x(j) = emx.tvcf.genos[j + offset];
-	  }
-	}
+        //fprintf(stderr,"%d\n",i);
+        int offset = i * emx.tvcf.nInds;
+        mu = emx.tvcf.alleleFreq(i)*2.;
+        for(j=0; j < emx.tvcf.nInds; ++j) {
+          if ( std::isnan(emx.tvcf.genos[j + offset]) ) {
+            x(j) = mu;
+          }
+          else {
+            x(j) = emx.tvcf.genos[j + offset];
+          }
+        }
 
-	emx.tvcf.GENOCNT(i,genocnts);
+        emx.tvcf.GENOCNT(i,genocnts);
 
-	// CHROM BEG END MARKER_ID NS AC CALLRATE GENOCNT MAF
-	wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i));
+        // CHROM BEG END MARKER_ID NS AC CALLRATE GENOCNT MAF
+        wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i));
 
-    	xt = Ur * x; // size q
-	for(k=0; k < g; ++k) {
-	  sx = sxx = sxy = 0;
-	  //xy = xsum = xsq = 0;
-	  for(j=0; j < c; ++j) {
-	    sxy += (xt(j)*emx.Y(j,k)/(deltas[k] + emx.evalR(j)));
-	    sx += (xt(j)/sqrt(deltas[k] + emx.evalR(j)));
-	    sxx += ((xt(j)*xt(j))/(deltas[k] + emx.evalR(j)));
-	  }
-	  // this is the estimates including the intercept always
-	  beta = ((c+1)*sxy-sx*sys[k])/((c+1)*sxx-sx*sx);
-	  //varE = 1/(c+1.)/(c-1.)*((c+1)*syys[k]-sys[k]*sys[k]-beta*beta*((c+1)*sxx-sx*sx));
-	  //sebeta = sqrt((c+1)*varE/((c+1)*sxx-sx*sx));
-	  r = ((c+1)*sxy-sx*sys[k])/sqrt(((c+1)*sxx-sx*sx)*((c+1)*syys[k]-sys[k]*sys[k]));
-	  t = r * sqrt((c-1)/(1-r*r+pEmmaxHelper::ZEPS));
-	  pval = pEmmaxHelper::tcdf(t, c-1);
-	  if ( pval <= arg.maxP ) {
-	    if ( arg.compact ) {
-	      wf.printf("\t%s,%.3lg,%.3lg",emx.pedcols[k].c_str(),pval,beta);
-	    }
-	    else {
-	      wf.printf("\t%.3lg\t%.3lg",pval,beta);
-	    }
-	  }
-	  else if ( !arg.compact ) {
-	    wf.printf("\tNA\tNA");
-	  }
-	}
-	wf.printf("\n");
-	++m;
+        xt = Ur * x; // size q
+        for(k=0; k < g; ++k) {
+          sx = sxx = sxy = 0;
+          //xy = xsum = xsq = 0;
+          for(j=0; j < c; ++j) {
+            sxy += (xt(j)*emx.Y(j,k)/(deltas[k] + emx.evalR(j)));
+            sx += (xt(j)/sqrt(deltas[k] + emx.evalR(j)));
+            sxx += ((xt(j)*xt(j))/(deltas[k] + emx.evalR(j)));
+          }
+          // this is the estimates including the intercept always
+          beta = ((c+1)*sxy-sx*sys[k])/((c+1)*sxx-sx*sx);
+          //varE = 1/(c+1.)/(c-1.)*((c+1)*syys[k]-sys[k]*sys[k]-beta*beta*((c+1)*sxx-sx*sx));
+          //sebeta = sqrt((c+1)*varE/((c+1)*sxx-sx*sx));
+          r = ((c+1)*sxy-sx*sys[k])/sqrt(((c+1)*sxx-sx*sx)*((c+1)*syys[k]-sys[k]*sys[k]));
+          t = r * sqrt((c-1)/(1-r*r+pEmmaxHelper::ZEPS));
+          pval = pEmmaxHelper::tcdf(t, c-1);
+          if ( pval <= arg.maxP ) {
+            if ( arg.compact ) {
+              wf.printf("\t%s,%.3lg,%.3lg",emx.pedcols[k].c_str(),pval,beta);
+            }
+            else {
+              wf.printf("\t%.3lg\t%.3lg",pval,beta);
+            }
+          }
+          else if ( !arg.compact ) {
+            wf.printf("\tNA\tNA");
+          }
+        }
+        wf.printf("\n");
+        ++m;
       }
       else if ( ! arg.compact ) {
-	mu = emx.tvcf.alleleFreq(i)*2.;
-	emx.tvcf.GENOCNT(i,genocnts);
-	wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i));
-	for(k=0; k < g; ++k) {
-	    wf.printf("\tNA\tNA");
-	}
-	wf.printf("\n");
+        mu = emx.tvcf.alleleFreq(i)*2.;
+        emx.tvcf.GENOCNT(i,genocnts);
+        wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i));
+        for(k=0; k < g; ++k) {
+          wf.printf("\tNA\tNA");
+        }
+        wf.printf("\n");
       }
     }
     fprintf(stderr,"%d markers included\n",m);
@@ -2672,68 +2673,68 @@ int runMultiAssocPlain(int argc, char** argv) {
     M += emx.tvcf.nMarkers;
     notice("Processing %d markers across %d individuals...", M, emx.tvcf.nInds);
     for(i=0, m=0; i < emx.tvcf.nMarkers; ++i) {
-      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) && 
-	   ( emx.tvcf.MAF(i) <= arg.maxMAF ) && 
-	   ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
-	   ( emx.tvcf.MAC(i) <= arg.maxMAC ) &&
-	   ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
-	   ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
+      if ( ( emx.tvcf.MAF(i) >= arg.minMAF ) &&
+           ( emx.tvcf.MAF(i) <= arg.maxMAF ) &&
+           ( emx.tvcf.MAC(i) >= arg.minMAC ) &&
+           ( emx.tvcf.MAC(i) <= arg.maxMAC ) &&
+           ( emx.tvcf.callRate(i) >= arg.minCallRate ) &&
+           ( ( arg.minRSQ == 0 ) || ( emx.tvcf.RSQ(i) >= arg.minRSQ ) ) ) {
 
-	//fprintf(stderr,"%d\n",i);
-	int offset = i * emx.tvcf.nInds;
-	mu = emx.tvcf.alleleFreq(i)*2.;
-	for(j=0; j < emx.tvcf.nInds; ++j) {
-	  if ( isnanf(emx.tvcf.genos[j + offset]) ) {
-	    x(j) = 0;
-	  }
-	  else {
-	    x(j) = emx.tvcf.genos[j + offset] - mu;
-	  }
-	}
+        //fprintf(stderr,"%d\n",i);
+        int offset = i * emx.tvcf.nInds;
+        mu = emx.tvcf.alleleFreq(i)*2.;
+        for(j=0; j < emx.tvcf.nInds; ++j) {
+          if ( std::isnan(emx.tvcf.genos[j + offset]) ) {
+            x(j) = 0;
+          }
+          else {
+            x(j) = emx.tvcf.genos[j + offset] - mu;
+          }
+        }
 
-	emx.tvcf.GENOCNT(i,genocnts);
+        emx.tvcf.GENOCNT(i,genocnts);
 
-	// CHROM BEG END MARKER_ID NS AC CALLRATE GENOCNT MAF
-	wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i));
+        // CHROM BEG END MARKER_ID NS AC CALLRATE GENOCNT MAF
+        wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i));
 
-	for(k=0; k < g; ++k) {
-	  sx = sxx = sxy = 0;
-	  //xy = xsum = xsq = 0;
-	  for(j=0; j < n; ++j) {
-	    sxy += x(j) * emx.Y(j,k);
-	    sx += x(j);
-	    sxx += (x(j)*x(j));
-	  }
-	  // this is the estimates including the intercept always
-	  beta = (n*sxy-sx*sys[k])/(n*sxx-sx*sx);
-	  //varE = 1/(c+1.)/(c-1.)*((c+1)*syys[k]-sys[k]*sys[k]-beta*beta*((c+1)*sxx-sx*sx));
-	  //sebeta = sqrt((c+1)*varE/((c+1)*sxx-sx*sx));
-	  r = (n*sxy-sx*sys[k])/sqrt((n*sxx-sx*sx)*(n*syys[k]-sys[k]*sys[k]));
-	  t = r * sqrt((n-2)/(1-r*r+pEmmaxHelper::ZEPS));
-	  pval = pEmmaxHelper::tcdf(t, n-2);
-	  if ( pval <= arg.maxP ) {
-	    if ( arg.compact ) {
-	      wf.printf("\t%s,%.3lg,%.3lg",emx.pedcols[k].c_str(),pval,beta);
-	    }
-	    else {
-	      wf.printf("\t%.3lg\t%.3lg",pval,beta);
-	    }
-	  }
-	  else if ( !arg.compact ) {
-	    wf.printf("\tNA\tNA");
-	  }
-	}
-	wf.printf("\n");
-	++m;
+        for(k=0; k < g; ++k) {
+          sx = sxx = sxy = 0;
+          //xy = xsum = xsq = 0;
+          for(j=0; j < n; ++j) {
+            sxy += x(j) * emx.Y(j,k);
+            sx += x(j);
+            sxx += (x(j)*x(j));
+          }
+          // this is the estimates including the intercept always
+          beta = (n*sxy-sx*sys[k])/(n*sxx-sx*sx);
+          //varE = 1/(c+1.)/(c-1.)*((c+1)*syys[k]-sys[k]*sys[k]-beta*beta*((c+1)*sxx-sx*sx));
+          //sebeta = sqrt((c+1)*varE/((c+1)*sxx-sx*sx));
+          r = (n*sxy-sx*sys[k])/sqrt((n*sxx-sx*sx)*(n*syys[k]-sys[k]*sys[k]));
+          t = r * sqrt((n-2)/(1-r*r+pEmmaxHelper::ZEPS));
+          pval = pEmmaxHelper::tcdf(t, n-2);
+          if ( pval <= arg.maxP ) {
+            if ( arg.compact ) {
+              wf.printf("\t%s,%.3lg,%.3lg",emx.pedcols[k].c_str(),pval,beta);
+            }
+            else {
+              wf.printf("\t%.3lg\t%.3lg",pval,beta);
+            }
+          }
+          else if ( !arg.compact ) {
+            wf.printf("\tNA\tNA");
+          }
+        }
+        wf.printf("\n");
+        ++m;
       }
       else if ( ! arg.compact ) {
-	mu = emx.tvcf.alleleFreq(i)*2.;
-	emx.tvcf.GENOCNT(i,genocnts);
-	wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i));
-	for(k=0; k < g; ++k) {
-	    wf.printf("\tNA\tNA");
-	}
-	wf.printf("\n");
+        mu = emx.tvcf.alleleFreq(i)*2.;
+        emx.tvcf.GENOCNT(i,genocnts);
+        wf.printf("%s\t%d\t%d\t%s\t%d\t%.2lf\t%.5lf\t%d/%d/%d\t%.5lf",emx.tvcf.chroms[i].c_str(),emx.tvcf.pos1s[i],emx.tvcf.pos1s[i]+emx.tvcf.refs[i].size()-1,emx.tvcf.markers[i].c_str(), emx.tvcf.numAlleles[i]/2, emx.tvcf.sumAlleles[i], emx.tvcf.callRate(i), genocnts[0], genocnts[1], genocnts[2], emx.tvcf.MAF(i));
+        for(k=0; k < g; ++k) {
+          wf.printf("\tNA\tNA");
+        }
+        wf.printf("\n");
       }
     }
     fprintf(stderr,"%d markers included\n",m);

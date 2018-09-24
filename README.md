@@ -8,13 +8,15 @@ EPACTS is a versatile software pipeline to perform various statistical tests for
 
 You can clone the current snapshot of this repository to install as well
 
-<pre>
-$ git clone https://github.com/statgen/EPACTS.git
-$ cd EPACTS
-$ ./configure --prefix [/path/to/install]
-$ make
-$ make install
-</pre>
+```Shell
+git clone https://github.com/statgen/EPACTS.git
+cd EPACTS
+cget install -DCMAKE_C_FLAGS="-fPIC" -DCMAKE_CXX_FLAGS="-fPIC" -f requirements.txt
+mkdir build; cd build
+cmake -DCMAKE_INSTALL_PREFIX=</path/to/install> -DCMAKE_TOOLCHAIN_FILE=../cget/cget/cget.cmake -DCMAKE_BUILD_TYPE=Release ..
+make
+make install
+```
 
 ### EPACTS Documentation
 

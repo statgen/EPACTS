@@ -40,8 +40,8 @@ public:
   bool sepchr;
 
   static int const DEFAULT_NSNPS = 10000L;
-  static double const DEFAULT_MIN_MAF = 1e-6;
-  static double const DEFAULT_MAX_MAF = 1;
+  constexpr static double const DEFAULT_MIN_MAF = 1e-6;
+  constexpr static double const DEFAULT_MAX_MAF = 1;
 
   pCHAPSArgs() :
     unit(DEFAULT_NSNPS), verbose(false), ignoreFilter(false), ignoreMissing(false), minAC(0), minMAC(0), maxAC(INT_MAX), minMAF(DEFAULT_MIN_MAF), maxMAF(DEFAULT_MAX_MAF), minCallRate(DEFAULT_MIN_MAF), sepchr(false)
@@ -140,9 +140,9 @@ int runPairHMM(int argc, char** argv) {
   std::vector<int> pos1s;
   uint8_t* PLs = new uint8_t[n * maxM * 3];
   double af, maf;
- 
+
   for(int M = 0; tvcf.readMarkers(1); ++M) {
-    if ( M % 10000 == 0 ) 
+    if ( M % 10000 == 0 )
       notice("Processing %d/%d markers across %d individuals..\n", m, M, tvcf.nInds);
     af = tvcf.alleleFreq(0);
     maf = af > 0.5 ? 1-af : af;
@@ -150,22 +150,22 @@ int runPairHMM(int argc, char** argv) {
     if ( ( maf >= arg.minMAF ) && ( tvcf.callRate(0) >= arg.minCallRate ) && ( tvcf.sumAlleles[0] >= arg.minAC ) && ( tvcf.sumAlleles[0] <= arg.maxAC ) ) {
       // see whether we reached maxM
       if ( maxM == m ) {
-	notice("Expanding maxM from %d to %d", maxM, maxM*2);
-	uint8_t* cPLs = PLs;
-	PLs = new uint8_t[n * maxM * 6];
-	for(int i=0; i < n; ++i) {
-	  memcpy( &PLs[i*maxM*6], &cPLs[i*maxM*3], sizeof(uint8_t) * (maxM *3) );
-	}
-	maxM *= 2;
-	delete [] cPLs;
+        notice("Expanding maxM from %d to %d", maxM, maxM*2);
+        uint8_t* cPLs = PLs;
+        PLs = new uint8_t[n * maxM * 6];
+        for(int i=0; i < n; ++i) {
+          memcpy( &PLs[i*maxM*6], &cPLs[i*maxM*3], sizeof(uint8_t) * (maxM *3) );
+        }
+        maxM *= 2;
+        delete [] cPLs;
       }
       pos1s.push_back(tvcf.pos1s[0]);
       AFs.push_back(af);
       markers.push_back(tvcf.markers[0]);
       for(int i=0; i < n; ++i) {
-	PLs[i * maxM * 3 + m * 3 + 0] = tvcf.PLs[i*3];
-	PLs[i * maxM * 3 + m * 3 + 1] = tvcf.PLs[i*3+1];
-	PLs[i * maxM * 3 + m * 3 + 2] = tvcf.PLs[i*3+2];
+        PLs[i * maxM * 3 + m * 3 + 0] = tvcf.PLs[i*3];
+        PLs[i * maxM * 3 + m * 3 + 1] = tvcf.PLs[i*3+1];
+        PLs[i * maxM * 3 + m * 3 + 2] = tvcf.PLs[i*3+2];
       }
       ++m;
     }

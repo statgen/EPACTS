@@ -1,0 +1,13 @@
+Package: epactsR
+Type: Package
+Title: Efficient and Parallelizable Association Container Toolbox for
+        Sequence Data
+Version: 3.3.3
+Date: 2017-09-06
+Author: Hyun Min Kang
+Maintainer: Hyun Min Kang <hmkang@umich.edu>
+Description: EPACTS association testing package
+License: GPL (>= 2)
+Depends: R (>= 2.13.0)
+NeedsCompilation: yes
+Packaged: 2017-09-06 17:47:28 UTC; hmkang

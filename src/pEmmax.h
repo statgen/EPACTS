@@ -12,7 +12,7 @@
 #include "pFile.h"
 #include "wFile.h"
 #include "Error.h"
-#include "genomeScore.h"
+#include "genomeScore.bak.h"
 
 #define MAGIC_KIN "EMMA_KIN"
 #define MAGIC_EIG "EMMA_EIG"
@@ -83,8 +83,8 @@ public:
   double maxP;
 
   static int const DEFAULT_UNIT = 10000L;
-  static double const DEFAULT_MIN = 1e-6;
-  static double const DEFAULT_MAX = 1;
+  constexpr static double const DEFAULT_MIN = 1e-6;
+  constexpr static double const DEFAULT_MAX = 1;
   static int const DEFAULT_MIN_MAC = 1;
   static int const DEFAULT_MAX_MAC = 1000000000;
   static int const DEFAULT_MAX_PERM = 10000000;
@@ -114,8 +114,8 @@ public:
   static const int N_MAGIC = 8;
   static const char *magicKin;
   static const char *magicEig;
-  static const double ZEPS = 1e-10;
-  static const double TOL = 1e-6;
+  constexpr static const double ZEPS = 1e-10;
+  constexpr static const double TOL = 1e-6;
 
   static bool writeIDs(wFile& wf, std::vector<std::string>& ids) {
     char* p = (char*) malloc(65536); // maximum ID length is 64k
@@ -694,7 +694,7 @@ public:
   }
   
   static double tcdf(double t, double nu) {
-    if ( isnan(t) ) return 1.;
+    if ( std::isnan(t) ) return 1.;
     else return betai(nu/2.,0.5,nu/(nu+t*t));
   }
 };
@@ -774,7 +774,7 @@ class pEmmax {
        }
        for(i=1; i < c; ++i) {
 	 if ( tokens[i] == "NA" ) {
-	   vcov.push_back(fVcf::NAN_DBL);
+	   vcov.push_back(std::numeric_limits<double>::quiet_NaN());
 	   ++nMissing;
 	 }
 	 else {
@@ -1034,7 +1034,7 @@ class pEmmax {
 	
 	for(int i=0; i < r; ++i) {
 	  for(int j=0; j < c; ++j) {
-	    if ( !isnan(X(i,j)) ) {
+	    if ( !std::isnan(X(i,j)) ) {
 	      ++colCnts[j];
 	      colSums[j] += X(i,j);
 	    }
@@ -1043,7 +1043,7 @@ class pEmmax {
 	
 	for(int i=0; i < r; ++i) {
 	  for(int j=0; j < c; ++j) {
-	    if ( isnan(X(i,j)) ) {
+	    if ( std::isnan(X(i,j)) ) {
 	      X(i,j) = (colCnts[j] > 0) ? (colSums[j]/colCnts[j]) : 0;
 	    }
 	  }
@@ -1117,7 +1117,7 @@ class pEmmaxMulti {
 	}
 	for(i=1; i < c; ++i) {
 	  if ( tokens[i] == "NA" ) {
-	    vphe.push_back(fVcf::NAN_DBL);
+	    vphe.push_back(std::numeric_limits<double>::quiet_NaN());
 	    ++nMissing;
 	  }
 	  else {
@@ -1149,7 +1149,7 @@ class pEmmaxMulti {
 	}
 	for(i=1; i < c; ++i) {
 	  if ( tokens[i] == "NA" ) {
-	    vcov.push_back(fVcf::NAN_DBL);
+	    vcov.push_back(std::numeric_limits<double>::quiet_NaN());
 	    ++nMissing;
 	  }
 	  else {
@@ -1393,7 +1393,7 @@ class pEmmaxMulti {
 	
 	for(int i=0; i < r; ++i) {
 	  for(int j=0; j < c; ++j) {
-	    if ( !isnan(X(i,j)) ) {
+	    if ( !std::isnan(X(i,j)) ) {
 	      ++colCnts[j];
 	      colSums[j] += X(i,j);
 	    }
@@ -1402,7 +1402,7 @@ class pEmmaxMulti {
 	
 	for(int i=0; i < r; ++i) {
 	  for(int j=0; j < c; ++j) {
-	    if ( isnan(X(i,j)) ) {
+	    if ( std::isnan(X(i,j)) ) {
 	      X(i,j) = (colCnts[j] > 0) ? (colSums[j]/colCnts[j]) : 0;
 	    }
 	  }

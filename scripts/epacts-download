@@ -28,7 +28,7 @@ my $fasta = "human_g1k_v37.fasta.gz";
 my $fai = "human_g1k_v37.fasta.fai";
 
 print "Connecting to $hostname\n";
-my $ftp = Net::FTP->new("$hostname", Debug => 0) or die "Cannot connect to $hostname $@";
+my $ftp = Net::FTP->new("$hostname", Debug => 0, Passive => 1) or die "Cannot connect to $hostname $@";
 $ftp->login("anonymous",'-anonymous@') || die "Cannot login ", $ftp->message;
 
 $ftp->cwd("$dir") or die "Cannot change working directory ", $ftp->message;
