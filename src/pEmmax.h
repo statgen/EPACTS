@@ -147,26 +147,45 @@ public:
     wFile wf(outname);
 
     int i,j;
-    size_t k;
+    //size_t k;
     int n = K.rows();
 
-    size_t size = N_MAGIC + sizeof(int) + sizeof(int) + sizeof(double) + sizeof(double) * (size_t) n * (size_t) ( n + 1 ) / 2;
+    //size_t size = N_MAGIC + sizeof(int) + sizeof(int) + sizeof(double) + sizeof(double) * (size_t) n * (size_t) ( n + 1 ) / 2;
 
-    notice("Allocating a memory of size %llu", size);
+    //notice("Allocating a memory of size %llu", size);
 
+    // write the header
+    size_t size = N_MAGIC + sizeof(int) + sizeof(int) + sizeof(double);
     char* p = (char*) malloc(size);
+    notice("writeKinWithIDs() - Allocating a memory of size %llu", size);    
+    for(int i=0; i < N_MAGIC; ++i) { p[i] = magicKin[i]; }
+    *(int*)(p + N_MAGIC) = n;
+    *(int*)(p + N_MAGIC + sizeof(int)) = 0;
+    *(double*)(p + N_MAGIC + sizeof(int) + sizeof(int)) = wsum;
+    wf.write(p,size);    
+
+    /*char* p = (char*) malloc(size);
     for(int i=0; i < N_MAGIC; ++i) { p[i] = magicKin[i]; }
     *(int*)(p + N_MAGIC) = n;
     *(int*)(p + N_MAGIC + sizeof(int)) = 0;
     *(double*)(p + N_MAGIC + sizeof(int) + sizeof(int)) = wsum;
     double* a = (double*)(p + N_MAGIC + sizeof(int) + sizeof(int) + sizeof(double));
+    */
 
-    for(i=0, k=0; i < n; ++i) {
-      for(j=0; j <= i; ++j, ++k) {
-	a[k] = K(j,i);
+    free(p);
+    size = sizeof(double) * (size_t)(n+1);
+    notice("writeKinWithIDs() - Allocating a memory of size %llu", size);
+    p = (char*) malloc(size);        
+
+    //for(i=0, k=0; i < n; ++i) {
+    for(i=0; i < n; ++i) {      
+      for(j=0; j <= i; ++j) { //, ++k) {
+	//a[k] = K(j,i);
+	p[j] = K(j, i);
       }
+      wf.write(p,sizeof(double) * (i+1)); // write kinship coefficient for each row
     }
-    wf.write(p,size);
+    //wf.write(p,size);
     free(p);
 
     writeIDs(wf, ids);
@@ -207,11 +226,11 @@ public:
     tf.read(&n,sizeof(int));
     tf.read(&fl,sizeof(int)); flag = fl;
     tf.read(&ws,sizeof(double)); wsum = ws;
-    size_t size = (size_t)n * ( (size_t)n + 1 ) / 2;
+    //size_t size = (size_t)n * ( (size_t)n + 1 ) / 2;
     //double* p = new double[size];
-    double* p = new double[n];
+    double* p = new double[(size_t)n];
 
-    notice("Allocating size %zu bytes.. \n", n * sizeof(double));    
+    notice("readKinWithIDs(): Allocating size %zu bytes.. \n", n * sizeof(double));    
 
     //notice("Allocating size %zu bytes.. \n", size * sizeof(double));
 	   
@@ -341,32 +360,48 @@ public:
     wFile wf(outname);
 
     int i,j;
-    size_t k;
+    //size_t k;
     int r = evecs.rows();
     int c = evecs.cols();
-    size_t size = N_MAGIC + sizeof(int) + sizeof(int) + sizeof(double) + sizeof(double) * ( (size_t)r * (size_t)c + (size_t)c );
+    
+    size_t size = N_MAGIC + sizeof(int) + sizeof(int) + sizeof(double); // + sizeof(double) * ( (size_t)r * (size_t)c + (size_t)c );
     char* p = (char*) malloc(size);
 
-    notice("Allocating a memory of size %llu", size);    
-
+    // write headers first
+    notice("writeEigenWithIDs(): Allocating a memory of size %llu", size);    
     for(int i=0; i < N_MAGIC; ++i) { p[i] = magicEig[i]; }
     *(int*)(p + N_MAGIC) = r;
     *(int*)(p + N_MAGIC + sizeof(int)) = c;
     *(double*)(p + N_MAGIC + sizeof(int) + sizeof(int)) = trK;
-    double* a = (double*)(p + N_MAGIC + sizeof(int) + sizeof(int) + sizeof(double));
+    wf.write(p,size);        
+    //double* a = (double*)(p + N_MAGIC + sizeof(int) + sizeof(int) + sizeof(double));
+    free(p);
 
-    for(i=0, k=0; i < c; ++i, ++k) {
-      a[k] = evals(k);
+    //for(i=0, k=0; i < c; ++i) { // ++k) {
+
+    // write eigenvvalues next
+    size = (sizeof(double) * (size_t)c);
+    p = (char*) malloc(size);
+    notice("writeEigenWithIDs(): Allocating a memory of size %llu", size);        
+    for(i=0; i < c; ++i) { 
+      //a[k] = evals(k);
+      p[i] = evals(i);      
     }
+    wf.write(p,size);            
+    free(p);    
 
+    // write eigenvvectors next    
+    size = (sizeof(double) * (size_t)r);
+    p = (char*) malloc(size);
+    notice("writeEigenWithIDs(): Allocating a memory of size %llu", size);          
     for(i=0; i < c; ++i) {
-      for(j=0; j < r; ++j, ++k) {
-	a[k] = evecs(j,i);
+      for(j=0; j < r; ++j) { // ++k) {
+      //a[k] = evecs(j,i);
+	p[j] = evecs(j,i);	
       }
+      wf.write(p,size);                
     }
-
-    wf.write(p,size);
-
+    //wf.write(p,size);
     free(p);
 
     writeIDs(wf, ids);
