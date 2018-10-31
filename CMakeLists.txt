@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.2)
-project(epacts VERSION 1.0.0)
+project(epacts VERSION 3.4.0)
 include(CMakePackageConfigHelpers)
 
 foreach (PROG_TO_CHECK cat cut dirname gnuplot grep groff gs head make mkdir mv perl pfbtops R rm Rscript sort zcat)
@@ -10,7 +10,7 @@ foreach (PROG_TO_CHECK cat cut dirname gnuplot grep groff gs head make mkdir mv 
     message(STATUS "Found ${PROG_TO_CHECK}")
 endforeach()
 
-add_definitions(-DEPACTS_VERSION="${PROJECT_VERSION}")
+add_definitions(-DEPACTS_VERSION="${PROJECT_VERSION}-rc1")
 
 set(CMAKE_CXX_STANDARD 11)
 
