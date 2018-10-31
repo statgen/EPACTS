@@ -2,7 +2,7 @@ Package: epactsR
 Type: Package
 Title: Efficient and Parallelizable Association Container Toolbox for
         Sequence Data
-Version: 3.3.3
+Version: 3.4.0
 Date: 2017-09-06
 Author: Hyun Min Kang
 Maintainer: Hyun Min Kang <hmkang@umich.edu>
