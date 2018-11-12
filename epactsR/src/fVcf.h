@@ -46,9 +46,11 @@ public:
   int nInds;           // number of individuals subselected
   int nMarkers;        // number of markers
   std::string key;     // key string
+  savvy::fmt data_format; // key enum
   boolParser parser;   // per-marker pattern matching parser
   bool passOnly;       // filtering option
   bool hardGenotype;   // hard/soft genotypes
+  std::string fname;   // fname
   //pFile tf;            // file handle
   std::vector<std::string> inds;     // individual IDs
   std::vector<std::string> markers;  // marker IDs
@@ -165,14 +167,15 @@ public:
     parser = rule;
     passOnly = pass;
     hardGenotype = ( key == "GT" ? true : false);
+    fname = vcf ? vcf : "";
 
-    savvy::fmt data_format = savvy::fmt::ac;
+    data_format = savvy::fmt::ac;
     if (key == "PL") data_format = savvy::fmt::pl;
     else if (key == "GL") data_format = savvy::fmt::gl;
     else if (key == "DS" || key == "EC") data_format = savvy::fmt::ds;
 
     //std::cerr << "REGION: " << region.chromosome() << ":" << region.from() << "-" << region.to() << std::endl;
-    reader_ = savvy::indexed_reader(vcf, region, data_format);
+    reader_ = savvy::indexed_reader(fname, region, data_format);
 
     if ( key == "GL" ) {
       glFlag = true;
@@ -1089,8 +1092,36 @@ public:
     return nMarkers;
   }
 
-  bool updateRegion(const char* region)
+  bool updateRegion(const char* region, bool sepchr = false)
   {
+    if (sepchr)
+    {
+      std::string newfname;
+      int pos = 0;
+      size_t ichr = 0;
+      std::string reg = region ? region : "";
+      while ( (ichr = fname.find("chr",pos)) != std::string::npos ) 
+      {
+        size_t idot = fname.find_first_of("-_./",ichr);
+        std::string newchr = reg.substr(0, reg.find(':'));
+        if ( idot == std::string::npos ) 
+          error("Cannot find '.','_','-', or '/' after chr in the filename with --sepchr option");
+        newfname += (fname.substr(pos,ichr-pos) + "chr" + newchr);
+        pos = idot;
+      }
+ 
+      newfname += fname.substr(pos);
+
+      if (fname != newfname)
+      {
+        fname = newfname;
+
+        notice("Changing the VCF file name to %s",fname.c_str());
+        reader_ = savvy::indexed_reader(fname, string_to_region(reg), data_format);
+        return reader_.good();
+      }
+    }
+
     reader_.reset_region(string_to_region(region ? region : ""));
     return reader_.good();
   }

@@ -563,7 +563,7 @@ int runConvert(int argc, char** argv) {
   double mu, sigma, r2 = 0;
   do {
     if ( !loci.empty() ) {
-      tvcf.updateRegion(loci.currentLocus().toString());
+      tvcf.updateRegion(loci.currentLocus().toString(), arg.sepchr);
       //notice("Extracing region %s..",loci.currentLocus().toString());
     }
 
@@ -948,7 +948,7 @@ int runIndexLD(int argc, char** argv) {
   tvcf.load(arg.vcf.c_str(), NULL, arg.field.c_str(), arg.rule.c_str(), !arg.ignoreFilter, arg.indf.empty() ? NULL : arg.indf.c_str());
   int n = tvcf.nInds;
 
-  tvcf.updateRegion(indexRegion.c_str());
+  tvcf.updateRegion(indexRegion.c_str(), arg.sepchr);
 
   if ( tvcf.readMarkers(1) == 0 ) {
     error("Cannot find a SNP at marker position %s",index.c_str());
@@ -1012,7 +1012,7 @@ int runIndexLD(int argc, char** argv) {
   }
 
   notice("Retrieving the genomic region %s",arg.region.c_str());
-  tvcf.updateRegion(arg.region.c_str());
+  tvcf.updateRegion(arg.region.c_str(), arg.sepchr);
 
   wFile wf(arg.outf.c_str());
   wf.printf("##INDEX=%s\n",index.c_str());
