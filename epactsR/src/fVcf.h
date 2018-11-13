@@ -1063,7 +1063,7 @@ public:
         }
       }
 
-      reader_.reset_region(string_to_region(region));
+      updateRegion(region, sepchr);
 
       markerSet.clear();
       markerSet.insert(markerIDs[i]);
@@ -1092,21 +1092,23 @@ public:
     return nMarkers;
   }
 
-  bool updateRegion(const char* region, bool sepchr = false)
+  bool updateRegion(const std::string& region, bool sepchr = false)
   {
     if (sepchr)
     {
       std::string newfname;
       int pos = 0;
       size_t ichr = 0;
-      std::string reg = region ? region : "";
       while ( (ichr = fname.find("chr",pos)) != std::string::npos ) 
       {
         size_t idot = fname.find_first_of("-_./",ichr);
-        std::string newchr = reg.substr(0, reg.find(':'));
+        std::string newchr = region.substr(0, region.find(':'));
         if ( idot == std::string::npos ) 
           error("Cannot find '.','_','-', or '/' after chr in the filename with --sepchr option");
-        newfname += (fname.substr(pos,ichr-pos) + "chr" + newchr);
+        if ( newchr.compare(0,3,"chr") == 0 )
+          newfname += (fname.substr(pos,ichr-pos) + newchr);	    
+        else
+          newfname += (fname.substr(pos,ichr-pos) + "chr" + newchr);
         pos = idot;
       }
  
@@ -1117,12 +1119,12 @@ public:
         fname = newfname;
 
         notice("Changing the VCF file name to %s",fname.c_str());
-        reader_ = savvy::indexed_reader(fname, string_to_region(reg), data_format);
+        reader_ = savvy::indexed_reader(fname, string_to_region(region), data_format);
         return reader_.good();
       }
     }
 
-    reader_.reset_region(string_to_region(region ? region : ""));
+    reader_.reset_region(string_to_region(region));
     return reader_.good();
   }
 
