@@ -12,6 +12,8 @@
 #include <set>
 #include <sstream>
 #include <iostream>
+#include <algorithm>
+#include <deque>
 
 #include <savvy/reader.hpp>
 
@@ -80,8 +82,8 @@ public:
   bool gpFlag;
   std::vector<double> p2e;
 
-  static const float NAN_FLT;
-  static const double NAN_DBL;
+//  static const float NAN_FLT;
+//  static const double NAN_DBL;
 
   static int parseMarkerID(const char* markerID, std::string& chrom, std::string& beg, std::string& end, std::string& name, std::string& anno) {
     const char* pp = markerID;
@@ -1034,48 +1036,81 @@ public:
     std::string curChrom;
     int beg = 1000000000, end = 0;
 
+    markerSet.clear();
+    std::deque<savvy::site_info> site_list(markerIDs.size());
+    std::vector<savvy::region> merged_regions;
     std::vector<std::string> tokens;
     for(int i=startIndex; i < (int)markerIDs.size(); ++i) {
+      markerSet.insert(markerIDs[i]);
       pFile::tokenizeLine(markerIDs[i].c_str(),":_/",tokens);
       if ( tokens.size() != 4 ) {
         error("Cannot parse markerID %s",markerIDs[i].c_str());
       }
-      std::string region(tokens[0]);
-      region += ":";
-      region += tokens[1];
-      region += "-";
-      region += tokens[1];
+//      std::string region(tokens[0]);
+//      region += ":";
+//      region += tokens[1];
+//      region += "-";
+//      region += tokens[1];
+      site_list[i] = savvy::site_info(std::string(tokens[0]), atoi(tokens[1].c_str()), std::string(tokens[2]), std::string(tokens[3]), {});
 
       if ( i == startIndex ) {
-        curChrom = tokens[0];
-        beg = end = atoi(tokens[1].c_str());
+        curChrom = site_list[i].chromosome();
+        beg = end = site_list[i].position();
+        merged_regions.emplace_back(site_list[i].chromosome(), site_list[i].position(), site_list[i].position());
       }
       else {
-        if ( curChrom != tokens[0] ) {
+        if ( merged_regions.back().chromosome() != site_list[i].chromosome() ) {
           curChrom = "multichrs";
           beg = end = 0;
+          merged_regions.emplace_back(site_list[i].chromosome(), site_list[i].position(), site_list[i].position());
           //error("Currently group across different chromosomes are not supported");
         }
         else {
           int bp = atoi(tokens[1].c_str());
           if ( beg > bp ) { beg = bp; }
           if ( end < bp ) { end = bp; }
+          std::uint64_t from = std::min(merged_regions.back().from(), site_list[i].position());
+          std::uint64_t to = std::max(merged_regions.back().to(), site_list[i].position());
+          merged_regions.back() = savvy::region(merged_regions.back().chromosome(), from, to);
         }
       }
+    }
 
-      updateRegion(region, sepchr);
+    for (auto reg = merged_regions.begin(); reg != merged_regions.end(); ++reg) {
+      updateRegion(*reg, sepchr);
 
-      markerSet.clear();
-      markerSet.insert(markerIDs[i]);
-      while (reader_.read(anno, temp_genos)) {
-        //nc = tf.getLength();
-        int cols2 = parseMarkers(anno, temp_genos);
-        if ( cols2 >= 0 ) {
-          if ( nInds != cols2 ) {
-            error("fVcf::readMarkers() : Column size does not match : %d vs %d at marker %s", nInds, cols2, markers[markers.size()-1].c_str() );
-            abort();
+      while (!site_list.empty() && reader_.read(anno, temp_genos)) {
+
+        while (!site_list.empty())
+        {
+          if (site_list.front().position() >= anno.position() || site_list.front().chromosome() != anno.chromosome())
+            break;
+          site_list.pop_front();
+        }
+
+        if (site_list.empty() || site_list.front().chromosome() != anno.chromosome())
+          break;
+
+        for (auto sites_it = site_list.begin(); sites_it != site_list.end() && site_list.front().position() == sites_it->position(); ++sites_it)
+        {
+          std::string target_id = sites_it->chromosome() + ":" + std::to_string(sites_it->position()) + "_" + sites_it->ref() + "/" + sites_it->alt();
+          std::string current_id = anno.chromosome() + ":" + std::to_string(anno.position()) + "_" + anno.ref() + "/" + anno.alt();
+          if (
+            sites_it->chromosome() == anno.chromosome() &&
+            sites_it->position() == anno.position() &&
+            sites_it->ref() == anno.ref() &&
+            sites_it->alt() == anno.alt())
+          {
+            //nc = tf.getLength();
+            int cols2 = parseMarkers(anno, temp_genos);
+            if ( cols2 >= 0 ) {
+              if ( nInds != cols2 ) {
+                error("fVcf::readMarkers() : Column size does not match : %d vs %d at marker %s", nInds, cols2, markers[markers.size()-1].c_str() );
+                abort();
+              }
+              ++nMarkers;
+            }
           }
-          ++nMarkers;
         }
       }
     }
@@ -1092,26 +1127,26 @@ public:
     return nMarkers;
   }
 
-  bool updateRegion(const std::string& region, bool sepchr = false)
+  bool updateRegion(const savvy::region& region, bool sepchr = false)
   {
     if (sepchr)
     {
       std::string newfname;
       int pos = 0;
       size_t ichr = 0;
-      while ( (ichr = fname.find("chr",pos)) != std::string::npos ) 
+      while ( (ichr = fname.find("chr",pos)) != std::string::npos )
       {
         size_t idot = fname.find_first_of("-_./",ichr);
-        std::string newchr = region.substr(0, region.find(':'));
-        if ( idot == std::string::npos ) 
+        std::string newchr = region.chromosome();
+        if ( idot == std::string::npos )
           error("Cannot find '.','_','-', or '/' after chr in the filename with --sepchr option");
         if ( newchr.compare(0,3,"chr") == 0 )
-          newfname += (fname.substr(pos,ichr-pos) + newchr);	    
+          newfname += (fname.substr(pos,ichr-pos) + newchr);
         else
           newfname += (fname.substr(pos,ichr-pos) + "chr" + newchr);
         pos = idot;
       }
- 
+
       newfname += fname.substr(pos);
 
       if (fname != newfname)
@@ -1119,13 +1154,50 @@ public:
         fname = newfname;
 
         notice("Changing the VCF file name to %s",fname.c_str());
-        reader_ = savvy::indexed_reader(fname, string_to_region(region), data_format);
+        reader_ = savvy::indexed_reader(fname, region, data_format);
         return reader_.good();
       }
     }
-
-    reader_.reset_region(string_to_region(region));
+    //notice("Updating region to %s, %d, %d", region.chromosome().c_str(), region.from(), region.to());
+    reader_.reset_region(region);
     return reader_.good();
+  }
+
+  bool updateRegion(const std::string& region, bool sepchr = false)
+  {
+      return updateRegion(string_to_region(region), sepchr);
+//    if (sepchr)
+//    {
+//      std::string newfname;
+//      int pos = 0;
+//      size_t ichr = 0;
+//      while ( (ichr = fname.find("chr",pos)) != std::string::npos )
+//      {
+//        size_t idot = fname.find_first_of("-_./",ichr);
+//        std::string newchr = region.substr(0, region.find(':'));
+//        if ( idot == std::string::npos )
+//          error("Cannot find '.','_','-', or '/' after chr in the filename with --sepchr option");
+//        if ( newchr.compare(0,3,"chr") == 0 )
+//          newfname += (fname.substr(pos,ichr-pos) + newchr);
+//        else
+//          newfname += (fname.substr(pos,ichr-pos) + "chr" + newchr);
+//        pos = idot;
+//      }
+//
+//      newfname += fname.substr(pos);
+//
+//      if (fname != newfname)
+//      {
+//        fname = newfname;
+//
+//        notice("Changing the VCF file name to %s",fname.c_str());
+//        reader_ = savvy::indexed_reader(fname, string_to_region(region), data_format);
+//        return reader_.good();
+//      }
+//    }
+//
+//    reader_.reset_region(string_to_region(region));
+//    return reader_.good();
   }
 
   // read markers until reach the end of file
@@ -1410,7 +1482,7 @@ private:
 };
 
 
-const float fVcf::NAN_FLT =  std::numeric_limits<float>::quiet_NaN(); //sqrtf(-1.);     // assign float  NAN value
-const double fVcf::NAN_DBL = std::numeric_limits<double>::quiet_NaN(); //sqrt(-1.);  // assign double NAN value
+//const float fVcf::NAN_FLT =  std::numeric_limits<float>::quiet_NaN(); //sqrtf(-1.);     // assign float  NAN value
+//const double fVcf::NAN_DBL = std::numeric_limits<double>::quiet_NaN(); //sqrt(-1.);  // assign double NAN value
 
 #endif // __TABIXED_FVCF_H
