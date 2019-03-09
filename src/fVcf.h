@@ -178,6 +178,7 @@ public:
 
     //std::cerr << "REGION: " << region.chromosome() << ":" << region.from() << "-" << region.to() << std::endl;
     reader_ = savvy::indexed_reader(fname, region, data_format);
+    reader_.set_policy(savvy::vcf::empty_vector_policy::skip_with_warning);
 
     if ( key == "GL" ) {
       glFlag = true;
@@ -973,7 +974,7 @@ public:
     //notice("icols.size() = %d",(int)icols.size());
     return j;
   }
-
+#if 0 // Not sure what this is for.
   template <typename SampleIter>
   int parseInds(SampleIter sample_beg, SampleIter sample_end, std::vector<std::string>& subids, int startIdx = 0) {
     int i, j;
@@ -994,6 +995,7 @@ public:
     }
     return j;
   }
+#endif
 
   template <typename SampleIter>
   int parseInds(SampleIter sample_beg, SampleIter sample_end, std::vector<int>& subcols, int startIdx = 0) {
@@ -1155,6 +1157,7 @@ public:
 
         notice("Changing the VCF file name to %s",fname.c_str());
         reader_ = savvy::indexed_reader(fname, region, data_format);
+        reader_.set_policy(savvy::vcf::empty_vector_policy::skip_with_warning);
         return reader_.good();
       }
     }
@@ -1405,13 +1408,13 @@ private:
   {
     //genos.reserve(genos.size() + g.size());
 
-    std::size_t i = 0;
-    std::size_t j = 0;
-    for (auto it = g.begin(); it != g.end(); ++it,++i)
+    if (key == "GT" || key == "DS")
     {
-      if (icols.empty() || (j < icols.size() && icols[j] == i))
+      std::size_t i = 0;
+      std::size_t j = 0;
+      for (auto it = g.begin(); it != g.end(); ++it,++i)
       {
-        if (key == "GT" || key == "DS")
+        if (icols.empty() || (j < icols.size() && icols[j] == i))
         {
           float f = (*it);
           genos.push_back(f);
@@ -1423,23 +1426,39 @@ private:
             sqAC += f * f;
             AN += 2;
           }
+          ++j;
         }
-        else if (key == "GL")
+      }
+      return j;
+    }
+    else if (key == "GL")
+    {
+      assert(g.size() == reader_.samples().size() * 3);
+      for (std::size_t i = 0; i < icols.size(); ++i)
+      {
+        for (std::size_t j = 0; j < 3; ++j)
         {
-          if ( *it < -25.5 ) PLs.push_back(255);
-          else PLs.push_back((std::uint8_t)(-10 * (*it) + 0.5));
+          if (g[icols[i] * 3 + j] < -25.5) PLs.push_back(255);
+          else PLs.push_back((std::uint8_t) (-10 * g[icols[i] * 3 + j] + 0.5));
         }
-        else //if (key == "PL")
+      }
+      return icols.size();
+    }
+    else //if (key == "PL")
+    {
+      assert(g.size() == reader_.samples().size() * 3);
+      for (std::size_t i = 0; i < icols.size(); ++i)
+      {
+        for (std::size_t j = 0; j < 3; ++j)
         {
-          int pl = (int)(*it);
+          int pl = (int) g[icols[i] * 3 + j];
           if (pl > 255)
             pl = 255;
           PLs.push_back((std::uint8_t) pl);
         }
-        ++j;
       }
+      return icols.size();
     }
-    return j;
   }
 
 //  void loadGenos(const gt_vec& var)
