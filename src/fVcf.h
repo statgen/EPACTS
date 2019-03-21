@@ -219,7 +219,7 @@ public:
     // TODO: get headers if needed. headers.push_back(line);
 
     if ( ( idset.size() > 0 ) && ( idset.size() != icols.size() ) ) {
-      warning("Identified %d individuals from index file, and only %d overlaps with VCF",(int)idset.size(),(int)icols.size());
+      warning("Identified %d individuals from index file, and only %d overlaps with VCF ",(int)idset.size(),(int)icols.size());
     }
   }
 
