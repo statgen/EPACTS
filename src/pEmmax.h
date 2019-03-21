@@ -382,10 +382,11 @@ public:
     // write eigenvvalues next
     size = (sizeof(double) * (size_t)c);
     p = (char*) malloc(size);
+    double* a = (double*)p;
     notice("writeEigenWithIDs(): Allocating a memory of size %llu", size);        
     for(i=0; i < c; ++i) { 
       //a[k] = evals(k);
-      p[i] = evals(i);      
+      a[i] = evals(i);      
     }
     wf.write(p,size);            
     free(p);    
@@ -393,11 +394,12 @@ public:
     // write eigenvvectors next    
     size = (sizeof(double) * (size_t)r);
     p = (char*) malloc(size);
+    a = (double*)p;
     notice("writeEigenWithIDs(): Allocating a memory of size %llu", size);          
     for(i=0; i < c; ++i) {
       for(j=0; j < r; ++j) { // ++k) {
       //a[k] = evecs(j,i);
-	p[j] = evecs(j,i);	
+	a[j] = evecs(j,i);	
       }
       wf.write(p,size);                
     }
