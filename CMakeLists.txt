@@ -50,7 +50,7 @@ add_custom_target(mmSKAT-install
 
 add_custom_target(epacts-version
                   ALL
-                  COMMAND echo '\#!/usr/bin/perl -wl\\nprint STDOUT' '"${PROJECT_VERSION}"\;' > epacts-version)
+                  COMMAND echo -e '\#!/usr/bin/perl -wl\\nprint STDOUT' '"${PROJECT_VERSION}"\;' > epacts-version)
 
 add_library(libtabix src/bedidx.c src/knetfile.c src/index.c)
 set_target_properties(libtabix PROPERTIES PREFIX "")
