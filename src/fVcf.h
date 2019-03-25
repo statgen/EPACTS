@@ -1228,6 +1228,8 @@ public:
       }
     }
     notice("Reading VCF took %d seconds", time(nullptr) - start_time);
+    if (!reader_.eof())
+      error("fVcf::readMarkers() : Failure while reading chunk file %s", fname.c_str());
     //notice("Returning %d",nMarkers-mStart);
     return ( nMarkers-mStart );
   }
