@@ -48,6 +48,10 @@ add_custom_target(mmSKAT-install
                   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
                   COMMENT "Installing mmSKAT ...")
 
+add_custom_target(epacts-version
+                  ALL
+                  COMMAND echo '\#!/usr/bin/perl -wl\\nprint STDOUT' '"${PROJECT_VERSION}"\;' > epacts-version)
+
 add_library(libtabix src/bedidx.c src/knetfile.c src/index.c)
 set_target_properties(libtabix PROPERTIES PREFIX "")
 target_link_libraries(libtabix ${HTS_LIBRARY} ${ZLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
@@ -76,10 +80,10 @@ add_executable(parse-sample-ids src/parse_sample_ids.cpp)
 target_link_libraries(parse-sample-ids savvy)
 
 file(GLOB_RECURSE EPACTS_PERL_SCRIPTS "scripts/ep*" "scripts/wGetOptions.pm")
-file(GLOB_RECURSE EPACTS_R_SCRIPTS "data/*.R")
+file(GLOB_RECURSE EPACTS_R_SCRIPTS  "data/*.R")
 file(GLOB_RECURSE EPACTS_DATA_FILES "data/*")
 
-install(FILES ${EPACTS_PERL_SCRIPTS}
+install(FILES ${EPACTS_PERL_SCRIPTS} ${CMAKE_BINARY_DIR}/epacts-version
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
         DESTINATION bin)
 install(FILES ${EPACTS_DATA_FILES} DESTINATION share/EPACTS)

@@ -60,6 +60,10 @@ elsif ( $ARGV[0] eq "download") {
     shift(@ARGV);
     exec("$bindir/epacts-download",@ARGV);
 }
+elsif ( $ARGV[0] eq "version") {
+    shift(@ARGV);
+    exec("$bindir/epacts-version",@ARGV);
+}
 else {
     print STDERR "ERROR: Unknown command $ARGV[0]. Please see the usage below.\n";
     pod2usage(1);
