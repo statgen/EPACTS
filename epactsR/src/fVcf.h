@@ -219,7 +219,7 @@ public:
     // TODO: get headers if needed. headers.push_back(line);
 
     if ( ( idset.size() > 0 ) && ( idset.size() != icols.size() ) ) {
-      warning("Identified %d individuals from index file, and only %d overlaps with VCF",(int)idset.size(),(int)icols.size());
+      warning("Identified %d individuals from index file, and only %d overlaps with VCF ",(int)idset.size(),(int)icols.size());
     }
   }
 
@@ -1228,6 +1228,8 @@ public:
       }
     }
     notice("Reading VCF took %d seconds", time(nullptr) - start_time);
+    if (!reader_.eof())
+      error("fVcf::readMarkers() : Failure while reading chunk file %s", fname.c_str());
     //notice("Returning %d",nMarkers-mStart);
     return ( nMarkers-mStart );
   }
