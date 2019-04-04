@@ -176,12 +176,12 @@ public:
     size = sizeof(double) * (size_t)(n+1);
     notice("writeKinWithIDs() - Allocating a memory of size %llu", size);
     p = (char*) malloc(size);        
-
+    double* a = (double*)p;
     //for(i=0, k=0; i < n; ++i) {
     for(i=0; i < n; ++i) {      
       for(j=0; j <= i; ++j) { //, ++k) {
 	//a[k] = K(j,i);
-	p[j] = K(j, i);
+	a[j] = K(j, i);
       }
       wf.write(p,sizeof(double) * (i+1)); // write kinship coefficient for each row
     }
