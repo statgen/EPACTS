@@ -14,7 +14,7 @@ use Pod::Usage;
 use Cwd;
 use FindBin;
 use lib "$FindBin::Bin";
-use epacts qw(@chrs @szchrs);
+#use epacts qw(@chrs @szchrs);
 my $dir = $FindBin::Bin;
 my $bindir = $dir;
 

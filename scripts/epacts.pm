@@ -3,13 +3,17 @@ package epacts;
 use base qw/Exporter/;
 use lib "$FindBin::Bin";
 use File::Basename;
+use Data::Dumper;
 
 ## Variables and methods shared across the package
-@EXPORT_OK = qw(@chrs @szchrs @cumszchrsMb parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrs readPedVcf readPedVcfMulti readPedKinLabel $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binawk $binpfbtops $bingnuplot $binepstopdf $binsort $defaultfasta installPackages tofpos fromfpos forkExecWait);
+@EXPORT_OK = qw(%chrsForBuild %szchrsForBuild %cumszchrsMbForBuild %complexForBuild %prefixForBuild parsePheno getMosixCmd schr2nchr vcfSampleIDs vcfSampleIndex %ichrsForBuild readPedVcf readPedVcfMulti readPedKinLabel $binR $binRscript $binrm $binmake $binzcat $bincat $binhead $binmv $bincut $bingrep $binawk $binpfbtops $bingnuplot $binepstopdf $binsort %defaultfastaForBuild installPackages tofpos fromfpos forkExecWait);
 
 $epactsdir = dirname($FindBin::Bin);
 $datadir = "$epactsdir/share/EPACTS";
-$defaultfasta = "$datadir/human_g1k_v37.fasta";
+%defaultfastaForBuild = (
+                     hg19 => "$datadir/human_g1k_v37.fasta",
+                     hg38 => "$datadir/GRCh38_full_analysis_set_plus_decoy_hla.fa"
+                );
 
 $binR = "R";
 $binRscript = "Rscript"; #$binRscript = "R CMD BATCH --slave --no-save --no-restore";
@@ -28,17 +32,46 @@ $bingnuplot = "gnuplot";
 $binepstopdf = "$epactsdir/bin/epstopdf";
 
 BEGIN {
-## Variables below are hard-coded based on GRCh37
-    @chrs = (1..22,"X","Y","MT");
-    @szchrs = qw(249250621 243199373 198022430 191154276 180915260 171115067 159138663 146364022 141213431 135534747 135006516 133851895 115169878 107349540 102531392 90354753 81195210 78077248 59128983 63025520 48129895 51304566 155270560 59373566 16569);
-    %ichrs = ();
-    
-    @cumszchrsMb = (0);
-    for(my $i=0; $i < @chrs; ++$i) {
-	push(@cumszchrsMb,$szchrs[$i]/1e6+$cumszchrsMb[$i]);
-	$ichrs{$chrs[$i]} = $i;
-    }
+## Hardcoded Variables replaced with associative list for both hg19 and hg38
+    %chrsForBuild = (
+            hg19 =>  [1..22,"X","Y","MT"],
+            hg38 =>  [1..22,"X","Y","M"]
+    );
+    %szchrsForBuild = (
+            hg19 => [qw(249250621 243199373 198022430 191154276 180915260 171115067 159138663 146364022 141213431 135534747 135006516 133851895 115169878 107349540 102531392 90354753 81195210 78077248 59128983 63025520 48129895 51304566 155270560 59373566 16569)],
+            hg38 => [qw(248956422 242193529 198295559 190214555 181538259 170805979 159345973 145138636 138394717 133797422 135086622 133275309 114364328 107043718 101991189 90338345 83257441 80373285 58617616 64444167 46709983 50818468 156040895 57227415 16569)]
+    );
+    %ichrsForBuild = ();
+    %cumszchrsMbForBuild = ();
+
+    foreach my $build ("hg19","hg38") {
+        my @chrs = @{$chrsForBuild{$build}};
+        my @szchrs = @{$szchrsForBuild{$build}};
+        my %ichrs = ();
+        my @cumszchrsMb = (0);
+        for(my $i=0; $i < @chrs; ++$i) {
+            push(@cumszchrsMb,$szchrs[$i]/1e6+$cumszchrsMb[$i]);
+            $ichrs{$chrs[$i]} = $i;
+        }
+        $ichrsForBuild{$build} = {%ichrs};
+        $cumszchrsMbForBuild{$build} = [@cumszchrsMb]; 
+   }
+
+  %complexForBuild = (
+      hg19 => [["5",44000001,52000000],["6",24000001,36000000],["8",8000001,12000000],["11",42000001,58000000],["17",40000001,43000000]],
+      hg38 => [["chr5",43999899,46405538], ["chr5",50109817,52704166], 
+          ["chr6",23999773,52135202], ["chr6",26726948,26726981], 
+          ["chr8",47303501,47317337], ["chr11",50809939,50809993], 
+          ["chr11",54525075,55026708], ["chr11",55104001,55104074], 
+          ["chr17",41843749,53922639]]
+  );
+  %prefixForBuild = (
+      hg19 => "",
+      hg38 => "chr"
+  );
+      
 }
+
 
 ## parse phenotype value, resolving missing values
 sub parsePheno {

@@ -6,7 +6,7 @@ use File::Basename;
 use FindBin;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs parsePheno $binmake $binrm readPedVcf);
+use epacts qw(%chrsForBuild %szchrsForBuild %complexForBuild %prefixForBuild parsePheno $binmake $binrm readPedVcf);
 
 my $vcf = "";
 my $out = "";
@@ -25,8 +25,7 @@ my $removeComplex = "";
 my $bedComplex = "";
 my $includeSexChr = "";
 my $mosixNodes = "";
-my @complex = (["5",44000001,52000000],["6",24000001,36000000],["8",8000001,12000000],["11",42000001,58000000],["17",40000001,43000000]);
-
+my $buildver = "hg19";
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
 wGetOptions(
@@ -92,6 +91,9 @@ wGetOptions(
 	       "Ignore intermediate results and restart from scratch",
 	       "Ignore intermediate results and restart from scratch. Equivalent to running GNU make with -B option",
 	       ],
+    "buildver=s", [\$buildver,
+		   "Name of genome build",
+		   "Name of genome build used for the annotation. hg19 and hg38 are available options"],
     "bed-complex=s",[\$bedComplex,
 		     "Custom BED file to specify the complex region",
 		     "Custom BED file to specify the complex region to be excluded in the kinshop calculation"
@@ -109,6 +111,7 @@ unless ( ( $vcf ) && ( $out ) ) {
     print STDERR "ERROR: Missing required option\n";
     wpod2usage(2);
 }
+my @complex=@{$complexForBuild{$buildver}};
 
 $minMAF = sprintf("%lg",$minMAF);
 $minCallRate = sprintf("%lg",$minCallRate);
@@ -155,6 +158,9 @@ my @kins = ();
 my @kcmds = ();
 my @tgts = ();
 my @cmds = ();
+my @chrs = @{$chrsForBuild{$buildver}};
+my @szchrs = @{$szchrsForBuild{$buildver}};
+my $prefix = $prefixForBuild{$buildver};
 
 for(my $i=0; $i < @chrs; ++$i) {
     if ( ( $chr eq "" ) || ( $chrs[$i] eq $chr ) ) {
@@ -219,6 +225,7 @@ for(my $i=0; $i < @chrs; ++$i) {
 		    my ($rchr,$rstart,$rend) = split(/[:\-]/,$reg);
 		    $op = "$out.$rchr.$rstart.$rend";
 		    my $kin = "$op.kin";
+                    $reg = $prefix . $reg;
 		    my $cmd = "$epactsdir/bin/pEmmax gen-kin --vcf $cvcf $optind --region $reg --field $field --minMAF $minMAF --minCallRate $minCallRate --out-kinf $kin --raw".($pass ? "" : " --ignoreFilter").($rule ? " --rule $rule" : "");
 		    if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
 		    $cmd = "\t$cmd\n";

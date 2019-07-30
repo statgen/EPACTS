@@ -6,7 +6,7 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs parsePheno readPedVcf readPedVcfMulti $binR $binRscript $binrm $binmake $binawk $defaultfasta installPackages %ichrs forkExecWait getMosixCmd);
+use epacts qw(%chrsForBuild %szchrsForBuild %prefixForBuild parsePheno readPedVcf readPedVcfMulti $binR $binRscript $binrm $binmake $binawk %defaultfastaForBuild installPackages %ichrsForBuild forkExecWait getMosixCmd);
 
 my $bed = "";
 my $prefix = "";
@@ -14,6 +14,7 @@ my $win = 1000000;
 my $out = "";
 my $ucsc = "";
 my $maxp = 1e-3;
+my $buildver = "hg19";
 
 ## distributions we're interested in
 my $maxGenes = 100000;
@@ -38,6 +39,11 @@ wGetOptions(
     "out=s",[\$out,
 	     "Output file name",
 	     ],
+     "buildver=s", [\$buildver,
+		   "Name of genome build",
+		   "Name of genome build used for the annotation. hg19 and hg38 are available   options"
+                   ],
+
     "win=i",[\$win,
 	      "Window to be considred in base pair",
 	      ],
@@ -62,6 +68,10 @@ die "Cannot open $bed\n" unless ( -s $bed );
 die "Cannot open $bed.tbi\n" unless ( -s "$bed.tbi" );
 die "Cannot open $prefix.epacts.gz\n" unless ( -s "$prefix.epacts.gz" );
 die "Cannot open $prefix.epacts.gz.tbi\n" unless ( -s "$prefix.epacts.gz.tbi" );
+my @szchrs = @{$szchrsForBuild{$buildver}};
+my %ichrs = %{$ichrsForBuild{$buildver}};
+my @chrs = @{$chrsForBuild{$buildver}};
+my $buildPrefix = $prefixForBuild{$buildver};
 
 open(OUT,"| bgzip -c > $out") || die "Cannot open $out\n";
 print OUT "#CHROM\tBEG\tEND\tMARKER\tMAF\tGENE\tTXSTART\tTXEND\tPVALUE\tBETA\n";
@@ -75,8 +85,8 @@ foreach my $chr (@chrs) {
     my %hgenes = ();
 
     my $imaf = -1;
-
-    open(IN,"tabix -h $prefix.epacts.gz $chr:0|") || die "Cannot open file\n";
+    my $prefixedChr = $buildPrefix.$chr;
+    open(IN,"tabix -h $prefix.epacts.gz $prefixedChr:0|") || die "Cannot open file\n";
     my @F = split(/[\t\r\n]/,<IN>);
     for(my $i=0; $i < @F; ++$i) {
 	if ( $F[$i] =~ /^(\S+)\.P$/ ) {
@@ -93,7 +103,7 @@ foreach my $chr (@chrs) {
     my $nheader = $#F+1;
 
     my ($il,$iu) = (0,0);
-    open(BED,"tabix $bed ".($ucsc ? "chr" : "")."$chr:0|") || die "Cannot open file\n";
+    open(BED,"tabix $bed ".($ucsc && !$buildPrefix ? "chr" : "")."$prefixedChr:0|") || die "Cannot open file\n";
     my %higenes = ();
     while(<BED>) {
 	my ($chr,$beg,$end,$gene) = split;

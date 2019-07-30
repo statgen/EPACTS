@@ -6,19 +6,19 @@ use FindBin;
 use File::Basename;
 use lib "$FindBin::Bin";
 use wGetOptions qw(wpod2usage wGetOptions);
-use epacts qw(@chrs @szchrs @cumszchrsMb parsePheno schr2nchr %ichrs $binR $binRscript $binrm $binmake $binzcat $binmv $defaultfasta);
+use epacts qw( parsePheno schr2nchr  $binR $binRscript $binrm $binmake $binzcat $binmv %defaultfastaForBuild);
 
 my $epactsdir = dirname($FindBin::Bin);
 my $datadir = "$epactsdir/share/EPACTS";
 my $in = "";
 my $out = "";
-my $db = "gencodeV14";
+my $db = "gencodeV27";
 my $buildver = "hg19";
-my $ref = $defaultfasta;
 my $codonf = "$datadir/codon.txt";
 my $priorityf = "$datadir/priority.txt";
 my $genef = "";
 my $keep = "";
+my $ref = "";
 
 ## Parse options and print usage if there is a syntax error,
 ## or if usage was explicitly requested.
@@ -35,7 +35,7 @@ wGetOptions(
 	     "Prefix of annotation output files. If -out is not specified, the original file will be overwritten with annotation"],
     "db=s", [\$db,
 	     "Gene prediction database",
-	     "Database of gene prediction. gencodeV7, gencodeV14, and refGene are available options. Using --genef option can explictly point the gene prediction file in UCSC format"],
+	     "Database of gene prediction. gencodeV7 (hg19 only), gencodeV14(hg19 only), genecodeV27 and refGene are available options. Using --genef option can explictly point the gene prediction file in UCSC format"],
     "buildver=s", [\$buildver,
 		   "Name of genome build",
 		   "Name of genome build used for the annotation. hg19 is available option"],
@@ -50,6 +50,7 @@ wGetOptions(
 	     "Keep intermediate files (.frq, .log, etc)"],
     ) || wpod2usage(2);
 
+$ref = $ref || $defaultfastaForBuild{$buildver};
 unless ( ( $in ) && ( -e $in ) && ( $ref ) && ( -s $ref ) && ( -s "$ref.fai" ) ) {
     print STDERR "ERROR: Missing required options\n";
     print STDERR "Cannot open $in\n" unless ( -s $in );
