@@ -6,6 +6,26 @@ EPACTS is a versatile software pipeline to perform various statistical tests for
 
 ### Downloading and Installing EPACTS
 
+Prerequisite Packages
+- zlib
+- ghostscript
+- R-studio
+- groff
+- gnuplot
+- automake  
+
+Installing these packages on Centos:
+<pre>
+$ sudo yum install epel-release
+$ sudo yum update
+$ sudo yum install zlib ghoshcript R groff gnuplot automake -y
+</pre>
+
+Initialize the autoreconf program:
+<pre>
+$ autoreconf -f -i
+</pre>
+
 You can clone the current snapshot of this repository to install as well
 
 <pre>
