@@ -14,7 +14,6 @@
 ##   addcols  : additional columns (with proper column names)
 ##################################################################
 
-
 ScoreTest_wSaddleApprox_Get_X1 = function(X1)
 {
 	q1<-ncol(X1)
@@ -649,16 +648,16 @@ ScoreTest_SPA <-function(genos,pheno,cov,obj.null,method=c("fastSPA","SPA"),minm
 	return(list(p.value=p.value,p.value.NA=p.value.NA,Is.converge=Is.converge,beta=beta,SEbeta=SEbeta))
 }
 
-
-
 ##################################################################
-## MAIN FUNCTION:  single.b.sna2
+## MAIN FUNCTION:  multi.b.sna2
 ##################################################################
-single.b.sna2 <- function() {
+multi.b.sna2 <- function() {
 
 
 	beta.Cutoff=5*10^-6
+
     n <- ncol(genos)
+    #k <- ncol(cov)
 	genos<-as.matrix(genos)
 	if(ncol(genos)==1)
 	{
@@ -667,35 +666,45 @@ single.b.sna2 <- function() {
 	} else {
 		m <- nrow(genos)
 	}
+g<-ncol(phenos)
 
     ## resolve missing genotype by mean imputation
     ina <- is.na(genos)
     if ( length(vids) > 0 ) {
         genos[ina] <- matrix(AC[vids]/NS[vids],nrow(genos),ncol(genos))[ina]
     }
+    
+    p <- matrix(NA,m,g) # store p-values for m markers
+    add <- matrix(NA,m,3*g) # extra columns:  p.value.NA, Beta, SE
+    cname <- outer(pnames,c("P.NA","BETA","SEBETA"),FUN="paste",sep=".") 
+	cname<-as.vector(t(cname))
 
-    p <- rep(NA,m) # store p-values for m markers
-    add <- matrix(NA,m,4) # extra columns:  p.value.NA, Is.converge, Beta, SE
-    cname <- c("PVAL.NA","CONVERGE","BETA","SEBETA") #,"N.CASE","N.CTRL","AF.CASE","AF.CTRL")
-
+	for(gind in 1:g)
+	{
     if ( m > 0 ) { ## If there is at least one marker to test
-        load(paste(nullf,".null.RData",sep=""))
-	cov=obj.null$X1
+	nm<-which(is.na(phenos[,gind])==FALSE)
+	pheno<-phenos[nm,gind]
+	geno<-as.matrix(genos[,nm])
+	if(ncol(geno)==1)	geno<-t(geno)
+	load(paste(nullf,".",pnames[gind],".null.RData",sep=""))
+	cov<-obj.null$X1
+
         for (i in 1:m) {
-            re <- TestSPAfast(as.numeric(genos[i,,drop=FALSE]), obj.null, Cutoff=2)
-            p[i] <- re$p.value
+            re <- TestSPAfast(as.vector(geno[i,,drop=FALSE]), obj.null, Cutoff=2)
+            p[i,gind] <- re$p.value
 	beta<-NA
 	SEbeta<-NA
-	if(p[i]<beta.Cutoff)
+	if(p[i,gind]<beta.Cutoff)
 		{
-			re.firth<-fast.logistf.fit(x=cbind(t(genos[i,,drop=FALSE]),cov),y=pheno,firth=TRUE)
+			re.firth<-fast.logistf.fit(x=cbind(t(geno[i,,drop=FALSE]),cov),y=pheno,firth=TRUE)
 			beta<-re.firth$beta[1]
 			SEbeta<-sqrt(re.firth$var[1,1])
-		}            
-            add[i,1:4] <- c(re$p.value.NA, re$Is.converge,beta,SEbeta)
-        }
+		}      
 
+            add[i,(gind-1)*3+1:3] <- c(re$p.value.NA,beta,SEbeta)
+        }
     }
+	}
 
 
     return(list(p=p, add=add, cname=cname))

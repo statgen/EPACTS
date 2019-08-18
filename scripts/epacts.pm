@@ -57,7 +57,12 @@ sub parsePheno {
 ## convert command to mosix command
 sub getMosixCmd {
     my ($cmd,$nodes) = @_;
-    return "mosbatch -E/tmp -i -j$nodes sh -c '$cmd'";
+    if ( $nodes =~ /srun/ ) { ## --mosixNodes "srun --partition=topmed-working --mem=13GB"
+	return "$nodes sh -c '$cmd'";
+    }
+    else {
+	return "mosbatch -E/tmp -i -j$nodes sh -c '$cmd'";
+    }
 }
 
 ## convert string chromosome to integer (compatible to PLINK)
@@ -503,7 +508,7 @@ sub readPedVcfMulti {
 	    my @p = ();
 	    for(my $j=0; $j < @iphes; ++$j) {
 		push(@p,&parsePheno($F[$iphes[$j]],$missing));
-		die "ERROR: Missing phenotype value is detected in individual $id, phenotype $rphes->[$j]. Currently EPACTS won't run with missing phenotypes\n" if ( $p[$#p] eq $missing );
+		#die "ERROR: Missing phenotype value is detected in individual $id, phenotype $rphes->[$j]. Currently EPACTS won't run with missing phenotypes\n" if ( $p[$#p] eq $missing );
 	    }
 	    $hPhes{$id} = \@p;
 	    

@@ -373,27 +373,33 @@ if ( $test eq "q.emmax" ) {  ## Need to generate kinship matrix and REML first
     close MAK;
 
 }
-else {
-    if ( !( $invNorm ) && ( $#covs >= 0 ) ) {
-	print STDERR "Performing inverse normal transformation of phenotypes\n";
-	open(R,">$out.regress.R") || die "Cannot open file $out.regress.R for writing\n";
-	print R "t5 <- read.table('$out.phe',nrows=2)\n";
-	print R "classes <- sapply(t5,class)\n";
-	print R "T <- read.table('$out.phe',colClasses=classes)\n";
-	print R "n <- as.matrix(T[,1])\n";
-	print R "Y <- as.matrix(T[,-1])\n";
-	print R "c <- as.matrix(read.table('$out.cov')[,-1])\n";
-	print R "R <- cbind(n, apply(Y,2,function(x) { lm(x~c)\$residual }))\n";
-	print R "colnames(R) <- scan('$out.phe',what=character(),nlines=1)\n";
-	print R "write.table(R,'$out.phe',row.names=FALSE,col.names=TRUE,quote=FALSE,sep=\"\t\")\n";
-	close R;
-	my $cmd = "$binRscript $out.regress.R --vanilla";
-	if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
-	&forkExecWait($cmd);
-	@covs = (); ## don't regress out covariates any more
-	unlink("$out.regress.R");
-    }
-    
+else {	
+#    if ( !( $invNorm ) && ( $#covs >= 0 ) ) {
+#	print STDERR "Performing inverse normal transformation of phenotypes\n";
+#	open(R,">$out.regress.R") || die "Cannot open file $out.regress.R for writing\n";
+#	print R "t5 <- read.table('$out.phe',nrows=2)\n";
+#	print R "classes <- sapply(t5,class)\n";
+#	print R "T <- read.table('$out.phe',colClasses=classes)\n";
+#	print R "n <- as.matrix(T[,1])\n";
+#	print R "Y <- as.matrix(T[,-1])\n";
+#	print R "c <- as.matrix(read.table('$out.cov')[,-1])\n";
+#	print R "R <- cbind(n, apply(Y,2,function(x) { lm(x~c)\$residual }))\n";
+#	print R "colnames(R) <- scan('$out.phe',what=character(),nlines=1)\n";
+#	print R "write.table(R,'$out.phe',row.names=FALSE,col.names=TRUE,quote=FALSE,sep=\"\t\")\n";
+#	close R;
+#	my $cmd = "$binRscript $out.regress.R --vanilla";
+#	if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
+#	&forkExecWait($cmd);
+#	@covs = (); ## don't regress out covariates any more
+#	unlink("$out.regress.R");
+#    }
+
+if ( $test eq "b.sna2" ) {	#Analyze Null model
+my $cmdn = "$binRscript $datadir/epactsMultiNull.R --vanilla $out $pheno $cov;";
+if ( $mosixNodes ) { $cmdn = &getMosixCmd($cmdn,$mosixNodes); }
+&forkExecWait($cmdn);
+}
+ 
     my @tgts = ();
     my @cmds = ();
     for(my $i=0; $i < @chrs; ++$i) {
@@ -421,24 +427,25 @@ else {
 		my $op = "$out.$chrs[$i].$start.$end";
 		my $region = "$chrs[$i]:$start-$end";
 		
-		my $tgt = "$op.epacts.gz";
-		my $cmd = "$epactsdir/bin/pEmmax multi-assoc-plain --vcf $cvcf --region $region --field $field --indf $ind --out-assocf $tgt --minMAF $minMAF --maxMAF $maxMAF --maxMAC $maxMAC --minRSQ $minRSQ --minCallRate $minCallRate --minMAC $minMAC --maxP $maxP --pheno $out.phe".($compact ? " --compact" : "");
+		my $tgt = "$op.epacts";
 		
-		#die "ERROR: Cannot find $datadir/multi.$test.R\n" unless ( -s "$datadir/multi.$test.R" );
+		die "ERROR: Cannot find $datadir/multi.$test.R\n" unless ( -s "$datadir/multi.$test.R" );
 
-		#$cmd = "$binRscript $datadir/epactsMulti.R --vanilla $epactsdir $pheno $cov $ind $cvcf $region $op.epacts $field $minMAF $maxMAF $minMAC $maxMAC $minCallRate $minRSQ ".(($pass) ? "TRUE" : "FALSE")." multi.$test; gzip $op.epacts";
+		my $cmd = "$binRscript $datadir/epactsMulti.R --vanilla $epactsdir $pheno $cov $ind $cvcf $region $op.epacts $field $minMAF $maxMAF $minMAC $maxMAC $minCallRate $minRSQ ".(($pass) ? "TRUE" : "FALSE")." multi.$test;";
+
+
 		if ( $mosixNodes ) { $cmd = &getMosixCmd($cmd,$mosixNodes); }
 		$cmd = "\t$cmd\n";
 
 		if ( $anno ) {
 		    if ( $mosixNodes ) { 
-			$cmd .= "\t".&getMosixCmd("$epactsdir/bin/epacts-anno --ref $ref --in $op.epacts.gz",$mosixNodes)."\n";
+			$cmd .= "\t".&getMosixCmd("$epactsdir/bin/epacts-anno --ref $ref --in $op.epacts",$mosixNodes)."\n";
 		    }
 		    else {
-			$cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts.gz --ref $ref\n";
+			$cmd .= "\t$epactsdir/bin/epacts-anno --in $op.epacts --ref $ref\n";
 		    }
 		}
-		$cmd .= "\t$epactsdir/bin/tabix -f -pbed $tgt\n";
+		#$cmd .= "\t$epactsdir/bin/tabix -f -pbed $tgt\n";
 		push(@tgts,$tgt);
 		push(@cmds,$cmd);
 
@@ -448,19 +455,20 @@ else {
     }
 
     print MAK "all: $out.epacts.OK\n\n";
-    print MAK "$out.epacts.OK: ".join(".tbi ",@tgts).".tbi\n";
+    print MAK "$out.epacts.OK: @tgts\n";
     print MAK "\t$epactsdir/bin/epacts-cat @tgts | $epactsdir/bin/bgzip -c > $out.epacts.gz\n";
     print MAK "\t$epactsdir/bin/tabix -f -pbed $out.epacts.gz\n";
-    print MAK "\t$binrm -f @tgts ".join(".tbi ",@tgts).".tbi\n";
+    print MAK "\t$binrm -f @tgts\n";
     print MAK "\ttouch $out.epacts.OK\n";
     print MAK "\n";
     for(my $i=0; $i < @tgts; ++$i) {
-	print MAK "$tgts[$i].tbi: $vcf $ped\n";
-	print MAK "\tsleep ".sprintf("%.3lfs",rand(10))."\n";
+	print MAK "$tgts[$i]: $vcf $ped\n";
+	#print MAK "\tsleep ".sprintf("%.3lfs",rand(10))."\n";
 	print MAK "$cmds[$i]\n";
     }
     close MAK;
 }
+
 
 print "Finished generating EPACTS Makefile\n";
 if ( $run < 0 ) {

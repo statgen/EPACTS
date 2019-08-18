@@ -303,6 +303,12 @@ if ( ( ! $sepchr ) && ( $vcf =~ /chr/ ) && ( ! $chr ) ) {
     print STDERR "*************************************************************************************\n";
 }
 
+if ( $test eq "b.sna2" ) {	#Analyze Null model
+my $cmdn = "$binRscript $datadir/epactsSingleNull.R --vanilla $out $pheno $cov;";
+if ( $mosixNodes ) { $cmdn = &getMosixCmd($cmdn,$mosixNodes); }
+&forkExecWait($cmdn);
+}
+
 open(MAK,">$out.Makefile") || die "Cannot open file $out.Makefile for writing\n";
 print MAK ".DELETE_ON_ERROR:\n\n";
 
