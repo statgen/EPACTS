@@ -100,7 +100,7 @@ if ( $region ) {
     open(IN,"$tabix -h $prefix.epacts.gz $region |") || die "Cannot open $prefix.epacts.gz";
 }
 else {
-    open(IN,"zcat $prefix.epacts.gz |") || die "Cannot open $prefix.epacts.gz";
+    open(IN,"$binzcat $prefix.epacts.gz |") || die "Cannot open $prefix.epacts.gz";
 }
 my @headers = split(/\s+/,<IN>);
 my $ipval;
