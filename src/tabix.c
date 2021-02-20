@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include <htslib/bgzf.h>
+#include "bgzf.h"
 #include "tabix.h"
 #include "knetfile.h"
 

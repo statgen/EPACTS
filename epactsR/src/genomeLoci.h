@@ -33,7 +33,12 @@ class genomeLocus {
 
   bool operator< (const genomeLocus& l) const {
     if ( chrom == l.chrom ) {
-      return ( beg1 < l.beg1 );
+      if ( beg1 == l.beg1 ) {
+	return ( end0 < l.end0 );
+      }
+      else {
+	return ( beg1 < l.beg1 );
+      }
     }
     else {
       int n1 = atoi(chrom.c_str());
@@ -161,5 +166,45 @@ class genomeLoci {
       sz += it->length();
     }
     return sz;
+  }
+
+  bool moveTo(const char* chr, int pos1) {
+    genomeLocus locus(chr, pos1, pos1);
+    it = loci.lower_bound(locus);
+    if ( it == loci.begin() ) { // do nothing
+      return (it->contains1(chr,pos1));
+    }
+    else if ( it == loci.end() ) {
+      std::set<genomeLocus>::iterator i = it;
+      --i;
+      if ( i->contains1(chr,pos1) ) { it = i; return true; }
+      else { return false; }
+    }
+    else {
+      if ( it->contains1(chr,pos1) ) return true;
+      else {
+	std::set<genomeLocus>::iterator i = it;
+	--i;
+	if ( i->contains1(chr,pos1) ) { it = i; return true; }
+	else { return false; }
+      }
+    }
+  }
+
+  bool contains1(const char* chr, int pos1) {
+    genomeLocus locus(chr, pos1, pos1);
+    std::set<genomeLocus>::iterator i = loci.lower_bound(locus);
+    --i;
+    //std::set<genomeLocus>::iterator it = loci.lower_bound(locus);
+    if ( i != loci.end() ) {
+      //if ( ( i->chrom == chr ) && ( i->beg1 <= pos1 ) && ( i->end0 >= pos1 ) ) {
+      //notice("%s %s %d %d %d %d",i->chrom.c_str(), chr, i->beg1, i->end0, pos1, ( i->chrom == chr ) && ( i->beg1 <= pos1 ) && ( i->end0 >= pos1 ) );
+      //}
+
+      return ( ( it->chrom == chr ) && ( it->beg1 <= pos1 ) && ( it->end0 >= pos1 ) );
+    }
+    else {
+      return false;
+    }
   }
 };

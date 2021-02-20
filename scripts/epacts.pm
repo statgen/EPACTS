@@ -17,7 +17,7 @@ our $binR = "R";
 our $binRscript = "Rscript"; #$binRscript = "R CMD BATCH --slave --no-save --no-restore";
 our $binrm = "rm";
 our $binmake = "make";
-our $binzcat = "zcat";
+our $binzcat = "gzip -cd";
 our $bincat = "cat";
 our $binhead = "head";
 our $binmv = "mv";

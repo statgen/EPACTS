@@ -7,7 +7,7 @@ foreach (PROG_TO_CHECK cat cut dirname gnuplot grep groff gs head make mkdir mv 
     if(NOT ${PROG_TO_CHECK}_EXE)
         message(FATAL_ERROR "${PROG_TO_CHECK} not found!")
     endif()
-    message(STATUS "Found ${PROG_TO_CHECK}")
+    message(STATUS "Found ${PROG_TO_CHECK} (${${PROG_TO_CHECK}_EXE})")
 endforeach()
 
 add_definitions(-DEPACTS_VERSION="${PROJECT_VERSION}")
@@ -52,9 +52,9 @@ add_custom_target(epacts-version
                   ALL
                   COMMAND printf '\#!/usr/bin/perl -wl\\nprint STDOUT \"%s\"\;' ${PROJECT_VERSION} > epacts-version)
 
-add_library(libtabix src/bedidx.c src/knetfile.c src/index.c)
+add_library(libtabix src/bedidx.c src/bgzf.c src/knetfile.c src/index.c)
 set_target_properties(libtabix PROPERTIES PREFIX "")
-target_link_libraries(libtabix ${HTS_LIBRARY} ${ZLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(libtabix ${ZLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(pEmmax src/pEmmax.cpp src/Parameters.cpp src/Error.cpp src/PhredHelper.cpp src/codonHelper.cpp src/fVcf.h)
 target_link_libraries(pEmmax libtabix savvy)
@@ -70,16 +70,16 @@ target_link_libraries(chaps libtabix savvy)
 add_executable(anno src/Anno.cpp src/IO.cpp)
 target_link_libraries(anno libtabix)
 
-add_executable(bgzip src/bgzip.c src/bedidx.c src/knetfile.c src/kstring.c)
-target_link_libraries(bgzip ${HTS_LIBRARY} ${ZLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+add_executable(bgzip src/bgzip.c src/bedidx.c src/knetfile.c src/kstring.c src/bgzf.c)
+target_link_libraries(bgzip ${ZLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
-add_executable(tabix src/tabix.c src/bedidx.c src/knetfile.c src/kstring.c src/index.c)
-target_link_libraries(tabix ${HTS_LIBRARY} ${ZLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+add_executable(tabix src/tabix.c src/bedidx.c src/knetfile.c src/kstring.c src/index.c src/bgzf.c)
+target_link_libraries(tabix ${ZLIB_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(parse-sample-ids src/parse_sample_ids.cpp)
 target_link_libraries(parse-sample-ids savvy)
 
-file(GLOB_RECURSE EPACTS_PERL_SCRIPTS "scripts/ep*" "scripts/wGetOptions.pm")
+file(GLOB_RECURSE EPACTS_PERL_SCRIPTS "scripts/ep*" "scripts/wGetOptions.pm" "scripts/test_run_epacts.sh")
 file(GLOB_RECURSE EPACTS_R_SCRIPTS  "data/*.R")
 file(GLOB_RECURSE EPACTS_DATA_FILES "data/*")
 

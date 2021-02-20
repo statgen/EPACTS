@@ -25,7 +25,7 @@
 
 class fVcf {
 private:
-  savvy::indexed_reader reader_;
+  savvy::reader reader_;
 
   static savvy::region string_to_region(const std::string& region_string)
   {
@@ -48,7 +48,7 @@ public:
   int nInds;           // number of individuals subselected
   int nMarkers;        // number of markers
   std::string key;     // key string
-  savvy::fmt data_format; // key enum
+  //savvy::fmt data_format; // key enum
   boolParser parser;   // per-marker pattern matching parser
   bool passOnly;       // filtering option
   bool hardGenotype;   // hard/soft genotypes
@@ -171,14 +171,15 @@ public:
     hardGenotype = ( key == "GT" ? true : false);
     fname = vcf ? vcf : "";
 
-    data_format = savvy::fmt::ac;
-    if (key == "PL") data_format = savvy::fmt::pl;
-    else if (key == "GL") data_format = savvy::fmt::gl;
-    else if (key == "DS" || key == "EC") data_format = savvy::fmt::ds;
+//    data_format = savvy::fmt::ac;
+//    if (key == "PL") data_format = savvy::fmt::pl;
+//    else if (key == "GL") data_format = savvy::fmt::gl;
+//    else if (key == "DS" || key == "EC") data_format = savvy::fmt::ds;
 
     //std::cerr << "REGION: " << region.chromosome() << ":" << region.from() << "-" << region.to() << std::endl;
-    reader_ = savvy::indexed_reader(fname, region, data_format);
-    reader_.set_policy(savvy::vcf::empty_vector_policy::skip_with_warning);
+    reader_ = savvy::reader(fname);
+    reader_.reset_bounds(region);
+    //reader_.set_policy(savvy::vcf::empty_vector_policy::skip_with_warning);
 
     if ( key == "GL" ) {
       glFlag = true;
@@ -409,17 +410,20 @@ public:
     }
   }
 
-  int parseMarkers(const savvy::site_info& anno, const std::vector<float>& temp_genos) {
+  int parseMarkers(const savvy::site_info& anno, std::vector<float>& temp_genos) {
     //notice("fVcf::parseMarkers() called");
     //, std::vector<std::string>& m, std::vector<float>& v, int startIdx = 9, const char* key = "GT", const char** infoSubstrs = NULL, int nSubstr = 0) {
     char* p;
     char* n;
 
+    if (key == "GT" || key == "HDS")
+      savvy::stride_reduce(temp_genos, temp_genos.size() / reader_.samples().size());
+
     std::string chrom = anno.chromosome();
     std::string pos = std::to_string(anno.position());
     std::string ref = anno.ref();
-    std::string alt = anno.alt();
-    std::string markerId = anno.prop("ID");
+    std::string alt = anno.alts().empty() ? "" : anno.alts()[0];
+    std::string markerId = anno.id();
     std::string markerKey = chrom+":"+pos+"_"+ref+"/"+alt;
     if ( ! markerSet.empty() ) {
       if ( markerSet.find(markerKey) == markerSet.end() ) {
@@ -427,7 +431,7 @@ public:
         return -1;
       }
     }
-    if ( ( passOnly ) && ( anno.prop("FILTER") != "PASS" ) ) return -1;
+    if ( ( passOnly ) && ( (anno.filters().empty() ? "" : anno.filters()[0]) != std::string("PASS") ) ) return -1;
     std::string s;
     int keyIdx = 0;
     int i, j, k, l;
@@ -480,7 +484,7 @@ public:
           genos.push_back(AFs[m]*2.);
           phases.push_back(0);
         }
-        if ( gpFlag ) { GPs.push_back(p0); GPs.push_back(p1); GPs.push_back(p2); }
+        if ( gpFlag ) { GPs.push_back(p0); GPs.push_back(p1); GPs.push_back(p2); } // TODO: this is never true
 
         AN += 2;
         AC += genos.back();
@@ -1032,7 +1036,7 @@ public:
   int readMarkerGroup(std::vector<std::string>& markerIDs,
                       int startIndex = 0, bool sepchr = false)
   {
-    savvy::site_info anno;
+    savvy::variant var;
     std::vector<float> temp_genos;
 
     std::string curChrom;
@@ -1053,7 +1057,7 @@ public:
 //      region += tokens[1];
 //      region += "-";
 //      region += tokens[1];
-      site_list[i] = savvy::site_info(std::string(tokens[0]), atoi(tokens[1].c_str()), std::string(tokens[2]), std::string(tokens[3]), {});
+      site_list[i] = savvy::site_info(std::string(tokens[0]), atoi(tokens[1].c_str()), std::string(tokens[2]), {std::string(tokens[3])}, {});
 
       if ( i == startIndex ) {
         curChrom = site_list[i].chromosome();
@@ -1071,8 +1075,8 @@ public:
           int bp = atoi(tokens[1].c_str());
           if ( beg > bp ) { beg = bp; }
           if ( end < bp ) { end = bp; }
-          std::uint64_t from = std::min(merged_regions.back().from(), site_list[i].position());
-          std::uint64_t to = std::max(merged_regions.back().to(), site_list[i].position());
+          std::uint64_t from = std::min(merged_regions.back().from(), (std::uint64_t)site_list[i].position());
+          std::uint64_t to = std::max(merged_regions.back().to(), (std::uint64_t)site_list[i].position());
           merged_regions.back() = savvy::region(merged_regions.back().chromosome(), from, to);
         }
       }
@@ -1081,30 +1085,34 @@ public:
     for (auto reg = merged_regions.begin(); reg != merged_regions.end(); ++reg) {
       updateRegion(*reg, sepchr);
 
-      while (!site_list.empty() && reader_.read(anno, temp_genos)) {
+      while (!site_list.empty() && reader_.read(var)) {
+        if (!var.alts().empty()) continue;
+        if (!var.get_format(key, temp_genos)) continue;
+        if (var.alts().size() > 1) warning("Only first allele at position %d is being considered", var.position()); // TODO: support multiallelic variants
 
         while (!site_list.empty())
         {
-          if (site_list.front().position() >= anno.position() || site_list.front().chromosome() != anno.chromosome())
+          if (site_list.front().position() >= var.position() || site_list.front().chromosome() != var.chromosome())
             break;
           site_list.pop_front();
         }
 
-        if (site_list.empty() || site_list.front().chromosome() != anno.chromosome())
+        if (site_list.empty() || site_list.front().chromosome() != var.chromosome())
           break;
 
         for (auto sites_it = site_list.begin(); sites_it != site_list.end() && site_list.front().position() == sites_it->position(); ++sites_it)
         {
-          std::string target_id = sites_it->chromosome() + ":" + std::to_string(sites_it->position()) + "_" + sites_it->ref() + "/" + sites_it->alt();
-          std::string current_id = anno.chromosome() + ":" + std::to_string(anno.position()) + "_" + anno.ref() + "/" + anno.alt();
+          assert(sites_it->alts().size() && var.alts().size());
+          std::string target_id = sites_it->chromosome() + ":" + std::to_string(sites_it->position()) + "_" + sites_it->ref() + "/" + sites_it->alts()[0];
+          std::string current_id = var.chromosome() + ":" + std::to_string(var.position()) + "_" + var.ref() + "/" + var.alts()[0];
           if (
-            sites_it->chromosome() == anno.chromosome() &&
-            sites_it->position() == anno.position() &&
-            sites_it->ref() == anno.ref() &&
-            sites_it->alt() == anno.alt())
+            sites_it->chromosome() == var.chromosome() &&
+            sites_it->position() == var.position() &&
+            sites_it->ref() == var.ref() &&
+            sites_it->alts()[0] == var.alts()[0])
           {
             //nc = tf.getLength();
-            int cols2 = parseMarkers(anno, temp_genos);
+            int cols2 = parseMarkers(var, temp_genos);
             if ( cols2 >= 0 ) {
               if ( nInds != cols2 ) {
                 error("fVcf::readMarkers() : Column size does not match : %d vs %d at marker %s", nInds, cols2, markers[markers.size()-1].c_str() );
@@ -1156,13 +1164,14 @@ public:
         fname = newfname;
 
         notice("Changing the VCF file name to %s",fname.c_str());
-        reader_ = savvy::indexed_reader(fname, region, data_format);
-        reader_.set_policy(savvy::vcf::empty_vector_policy::skip_with_warning);
+        reader_ = savvy::reader(fname);
+        reader_.reset_bounds(region);
+        //reader_.set_policy(savvy::vcf::empty_vector_policy::skip_with_warning);
         return reader_.good();
       }
     }
     //notice("Updating region to %s, %d, %d", region.chromosome().c_str(), region.from(), region.to());
-    reader_.reset_region(region);
+    reader_.reset_bounds(region);
     return reader_.good();
   }
 
@@ -1205,7 +1214,7 @@ public:
 
   // read markers until reach the end of file
   int readMarkers(int m = 0, bool del = true) {
-    savvy::site_info anno;
+    savvy::variant var;
     std::vector<float> temp_genos;
 
     if ( del ) clear();
@@ -1215,8 +1224,12 @@ public:
     time_t start_time = time(nullptr);
     //parseInds(reader_.samples_begin(), reader_.samples_end(), icols);
     //fprintf(stderr,"fVcf::readMarkers(%d) called",m);
-    while (reader_.read(anno, temp_genos)) {
-      int cols2 = parseMarkers(anno, temp_genos);
+    while (reader_.read(var)) {
+      if (!var.alts().empty()) continue;
+      if (!var.get_format(key, temp_genos)) continue;
+      if (var.alts().size() > 1) warning("Only first allele at position %d is being considered", var.position()); // TODO: support multiallelic variants
+
+      int cols2 = parseMarkers(var, temp_genos);
       //notice("cols2 = %d",cols2);
       if ( cols2 >= 0 ) {
         if ( nInds != cols2 ) {
@@ -1228,7 +1241,7 @@ public:
       }
     }
     notice("Reading VCF took %d seconds", time(nullptr) - start_time);
-    if (!reader_.good() && !reader_.eof())
+    if (reader_.bad())
       error("fVcf::readMarkers() : Failure while reading chunk from file %s", fname.c_str());
     //notice("Returning %d",nMarkers-mStart);
     return ( nMarkers-mStart );
@@ -1410,7 +1423,7 @@ private:
   {
     //genos.reserve(genos.size() + g.size());
 
-    if (key == "GT" || key == "DS")
+    if (key == "GT" || key == "DS" || key == "HDS")
     {
       std::size_t i = 0;
       std::size_t j = 0;

@@ -9,7 +9,7 @@ int main(int argc, char** argv)
 
   if (argc == 2)
   {
-    savvy::reader rdr(argv[1], savvy::fmt::gt);
+    savvy::reader rdr(argv[1]);
 
     if (rdr)
     {

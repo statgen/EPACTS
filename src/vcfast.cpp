@@ -21,7 +21,7 @@
 #include "GenomeSequence.h"
 #include "cdsStat.h"
 #include "ncStat.h"
-#include <htslib/bgzf.h>
+#include "bgzf.h"
 
 #define WINDOW_SIZE 65536
 

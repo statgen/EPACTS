@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <cstdio>
 
-#include <htslib/bgzf.h>
+#include "bgzf.h"
 #include "tabix.h"
 
 #include "Error.h"
