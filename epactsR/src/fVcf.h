@@ -1086,7 +1086,7 @@ public:
       updateRegion(*reg, sepchr);
 
       while (!site_list.empty() && reader_.read(var)) {
-        if (!var.alts().empty()) continue;
+        if (var.alts().empty()) continue;
         if (!var.get_format(key, temp_genos)) continue;
         if (var.alts().size() > 1) warning("Only first allele at position %d is being considered", var.position()); // TODO: support multiallelic variants
 
@@ -1225,7 +1225,7 @@ public:
     //parseInds(reader_.samples_begin(), reader_.samples_end(), icols);
     //fprintf(stderr,"fVcf::readMarkers(%d) called",m);
     while (reader_.read(var)) {
-      if (!var.alts().empty()) continue;
+      if (var.alts().empty()) continue;
       if (!var.get_format(key, temp_genos)) continue;
       if (var.alts().size() > 1) warning("Only first allele at position %d is being considered", var.position()); // TODO: support multiallelic variants
 
