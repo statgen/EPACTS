@@ -87,7 +87,7 @@ sub schr2nchr {
 sub vcfSampleIDs {
     my $vcf = shift;
     my @F = ();
-    if ( -s "$vcf.tbi" || -s "$vcf.csi" || -s "$vcf.s1r" ) {
+    if ( substr($vcf, -4) eq ".sav" || -s "$vcf.tbi" || -s "$vcf.csi" ) {
 	@F = split(/[\t\r\n]+/,`$epactsdir/bin/parse-sample-ids $vcf`); #tabix -H $vcf | tail -1`);
     }
     else {

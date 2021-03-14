@@ -139,7 +139,7 @@ my $epactsdir = dirname($FindBin::Bin);
 
 ## preprocess input VCF files to get the list of individual IDS
 die "ERROR: Cannot open $vcf\n" unless ( -s $vcf );
-die "ERROR: Cannot open $vcf index. The VCF file must be indexed\n" unless ( -s "$vcf.tbi" || -s "$vcf.csi" || -s "$vcf.s1r" );
+die "ERROR: Cannot open $vcf index. The VCF file must be indexed\n" unless ( substr($vcf, -4) eq ".sav" || -s "$vcf.tbi" || -s "$vcf.csi" );
 
 my $optind = "";
 if ( $ped ) {
