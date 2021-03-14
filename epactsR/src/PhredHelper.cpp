@@ -27,7 +27,7 @@ phredConverter::phredConverter()
     // base quality values stored as log10 (error rates) into
     // fractional error rates
   for (int i = 0; i <= 255; i++) {
-    phred2Err[i] = pow(0.1, i * 0.1);
+    phred2Err[i] = (i > 1) ? pow(0.1, i * 0.1) : 0.75;
     phred2Mat[i] = 1.-phred2Err[i];
     phred2Mat3[i] = 1.-phred2Err[i]/3.;
     phred2LogMat[i] = log10(phred2Mat[i]);
