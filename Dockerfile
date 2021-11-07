@@ -1,4 +1,7 @@
-FROM ubuntu:16.04
+FROM ubuntu:18.04
+
+# To suppress tzdata region prompt
+ARG DEBIAN_FRONTEND=noninteractive
 
 ENV SRC_DIR /tmp/epacts-src
 
