@@ -1,12 +1,9 @@
 FROM ubuntu:18.04
 
-# To suppress tzdata region prompt
-ARG DEBIAN_FRONTEND=noninteractive
-
 ENV SRC_DIR /tmp/epacts-src
 
 RUN set -x \
-    && apt-get update && apt-get install -y \
+    && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
         build-essential \
         cmake \
         curl \
