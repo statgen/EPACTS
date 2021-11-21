@@ -6,6 +6,14 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 AUTOMAKE_OPTIONS = foreign
 SUBDIRS = src data scripts
 
+docker-centos:
+	docker build -t epacts/master/centos:latest \
+		-f docker/centos/Dockerfile .
+
+docker-ubuntu:
+	docker build -t epacts/master/ubuntu:latest \
+		-f docker/ubuntu/Dockerfile .
+
 install-exec-hook:
 	mkdir --p $(libdir)
 	R CMD INSTALL -l $(libdir) $(datadir)/${PACKAGE}/epactsR_3.3.2.tar.gz
