@@ -26,7 +26,7 @@ elsif ( $ARGV[0] =~ /^([\-])*man$/ ) {
     pod2usage(-verbose => 2);
 }
 elsif ( $ARGV[0] =~ /^([\-])*help$/ ) {
-    pod2usage(1);
+    pod2usage(0);
 }
 elsif ( $ARGV[0] eq "single") {
     shift(@ARGV);
