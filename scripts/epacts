@@ -86,7 +86,6 @@ epacts [command] [options]
    group           Perform groupwise (burden-style) association test
    anno            Annotate a VCF file
    zoom            Create a locus zoom plot from epacts results
-   meta            Perform meta-analysis across multiple epacts results
    make-group      Create the group information for gene-based testing
    make-kin        Create a kinship matrix
    version         prints version
