@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 ENV SRC_DIR /tmp/epacts-src
 
@@ -14,7 +14,7 @@ RUN set -x \
         help2man \
         lsb-release \
         python \
-        python-pip \
+        python3-pip \
         r-base \
         rpm \
     && pip install cget
