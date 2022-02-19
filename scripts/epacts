@@ -89,6 +89,7 @@ epacts [command] [options]
    meta            Perform meta-analysis across multiple epacts results
    make-group      Create the group information for gene-based testing
    make-kin        Create a kinship matrix
+   download        Download the reference sequence file
    version         prints version
 
  Visit http://genome.sph.umich.edu/wiki/EPACTS for more detailed documentation
@@ -126,6 +127,13 @@ Create a locus zoom plot from epacts results. Type 'epacts zoom -help' for more 
 Perform meta-analysis across multiple epacts results. Type 'epacts meta -help' for more detailed information
 
 =back
+
+=item B<download>
+
+Download the reference sequence file (currently supports only GRCh37) to run EPACTS with annotation support.
+
+=back
+
 
 =head1 DESCRIPTION
 
